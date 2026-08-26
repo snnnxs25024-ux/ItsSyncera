@@ -63,17 +63,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [selectedServer?.id]);
 
   const navigationItems = [
-    { id: 'overview' as DashboardTab, label: 'Dashboard', icon: Activity },
-    { id: 'servers' as DashboardTab, label: 'Infrastructure', icon: Server },
+    { id: 'overview' as DashboardTab, label: 'Overview', icon: Activity },
+    { id: 'servers' as DashboardTab, label: 'Servers', icon: Server },
     { id: 'monitoring' as DashboardTab, label: 'Monitoring', icon: RefreshCw },
-    { id: 'alerts' as DashboardTab, label: 'Alert Center', icon: AlertTriangle, badge: alerts.filter(a => a.status === 'Monitoring').length },
+    { id: 'alerts' as DashboardTab, label: 'Alerts', icon: AlertTriangle, badge: alerts.filter(a => a.status === 'Monitoring').length },
     { id: 'automation' as DashboardTab, label: 'Automation', icon: ShieldCheck },
     { id: 'maintenance' as DashboardTab, label: 'Maintenance', icon: HardDrive },
     { id: 'backup' as DashboardTab, label: 'Backup', icon: HardDrive },
     { id: 'reports' as DashboardTab, label: 'Reports', icon: FileText },
-    { id: 'subscription' as DashboardTab, label: 'Subscription', icon: CreditCard },
-    { id: 'support' as DashboardTab, label: 'Support Ticket', icon: LifeBuoy },
-    { id: 'settings' as DashboardTab, label: 'Account Settings', icon: Settings },
+    { id: 'subscription' as DashboardTab, label: 'Billing', icon: CreditCard },
+    { id: 'support' as DashboardTab, label: 'Support', icon: LifeBuoy },
+    { id: 'settings' as DashboardTab, label: 'Settings', icon: Settings },
   ];
 
   return (
