@@ -14,7 +14,7 @@ export type DashboardTab =
 export interface ServerItem {
   id: string;
   name: string;
-  status: 'active' | 'warning' | 'critical' | 'maintenance';
+  status: 'active' | 'warning' | 'critical' | 'maintenance' | 'waiting';
   os: string;
   ipAddress: string;
   provider: string;
@@ -24,6 +24,12 @@ export interface ServerItem {
   storageUsage: number;
   networkTraffic: string;
   lastCheck: string;
+  connectionType?: 'ssh' | 'agent' | 'proxmox';
+  connectionStatus?: string;
+  uptime30d?: string;
+  backupStatus?: string;
+  sslStatus?: string;
+  lastSeen?: string;
   services: {
     name: string;
     status: 'online' | 'degraded' | 'offline';
