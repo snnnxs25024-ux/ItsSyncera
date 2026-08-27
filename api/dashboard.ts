@@ -1,4 +1,4 @@
-import { ApiError, dashboardData } from './_syncera';
+import { ApiError, dashboardData } from '../src/server/syncera';
 
 export default async function handler(_req: any, res: any) {
   try {

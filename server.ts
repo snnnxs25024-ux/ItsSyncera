@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { ApiError, createServerRecord, dashboardData, listServers } from './api/_syncera';
+import { ApiError, createServerRecord, dashboardData, listServers } from './src/server/syncera';
 
 const bodyOf = (req: express.Request) => typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
 

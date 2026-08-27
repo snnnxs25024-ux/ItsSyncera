@@ -1,4 +1,4 @@
-import { ApiError, createServerRecord, listServers } from './_syncera';
+import { ApiError, createServerRecord, listServers } from '../src/server/syncera';
 
 const bodyOf = (req: any) => {
   if (!req.body) return {};
