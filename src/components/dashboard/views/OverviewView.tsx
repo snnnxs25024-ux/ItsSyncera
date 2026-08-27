@@ -1,36 +1,49 @@
 import React from 'react';
-import { Server, Activity, AlertTriangle, ShieldCheck, ArrowUpRight, CheckCircle2, Clock, Cpu, HardDrive, Wifi, Database, Globe2, LifeBuoy, TimerReset } from 'lucide-react';
-import { ServerItem, AlertItem } from '../../../types/dashboard';
+import { Server, Activity, AlertTriangle, ShieldCheck, ArrowUpRight, CheckCircle2, Clock, Cpu, Wifi, Database, Globe2, PlugZap, TimerReset } from 'lucide-react';
+import { ServerItem, AlertItem, BackupItem } from '../../../types/dashboard';
 
 interface OverviewViewProps {
   servers: ServerItem[];
   alerts: AlertItem[];
+  backups: BackupItem[];
   onNavigateTab: (tab: any) => void;
   onSelectServer: (server: ServerItem) => void;
 }
 
-export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onNavigateTab, onSelectServer }) => {
+export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, backups, onNavigateTab, onSelectServer }) => {
   const activeCount = servers.filter(s => s.status === 'active').length;
   const warningCount = servers.filter(s => s.status === 'warning').length;
   const criticalCount = servers.filter(s => s.status === 'critical').length;
   const activeAlerts = alerts.filter(a => a.status !== 'Resolved');
+  const criticalAlertCount = activeAlerts.filter(a => a.severity === 'critical').length;
+  const warningAlertCount = activeAlerts.filter(a => a.severity === 'warning').length;
   const services = servers.flatMap(s => s.services);
   const onlineServices = services.filter(s => s.status === 'online').length;
   const degradedServices = services.filter(s => s.status === 'degraded').length;
   const offlineServices = services.filter(s => s.status === 'offline').length;
-  const overallStatus = criticalCount > 0 ? 'Perlu Tindakan' : warningCount > 0 ? 'Perlu Perhatian' : 'Aman';
-  const overallTone = criticalCount > 0 ? 'bg-rose-600' : warningCount > 0 ? 'bg-amber-500' : 'bg-emerald-600';
-  const backupStatus = 'Berhasil hari ini, 02:00 WIB';
-  const sslStatus = 'Valid, expired 42 hari lagi';
-  const lastUpdated = servers[0]?.lastCheck || 'Baru saja';
+  const criticalSignalCount = criticalCount + offlineServices + criticalAlertCount;
+  const warningSignalCount = warningCount + degradedServices + warningAlertCount;
+  const primaryServer = servers[0];
+  const latestBackup = backups[0];
+  const overallStatus = servers.length === 0 ? 'Belum Ada Data' : criticalSignalCount > 0 ? 'Perlu Tindakan' : warningSignalCount > 0 ? 'Perlu Perhatian' : 'Aman';
+  const overallTone = servers.length === 0 ? 'bg-slate-600' : criticalSignalCount > 0 ? 'bg-rose-600' : warningSignalCount > 0 ? 'bg-amber-500' : 'bg-emerald-600';
+  const backupStatus = primaryServer?.backupStatus || (latestBackup ? `${latestBackup.status} • ${latestBackup.date}` : 'Belum ada backup terdeteksi');
+  const backupDetail = latestBackup ? `${latestBackup.server} • ${latestBackup.size}` : 'Diambil dari Proxmox storage/tasks.';
+  const sslStatus = primaryServer?.sslStatus || 'Belum dicek';
+  const uptimeStatus = primaryServer?.uptime30d || '-';
+  const connectionStatus = primaryServer?.connectionStatus || 'Belum ada koneksi server';
+  const lastUpdated = primaryServer?.lastCheck || 'Belum ada data';
+  const avgOf = (field: 'cpuUsage' | 'memoryUsage' | 'storageUsage') => servers.length
+    ? Math.round(servers.reduce((acc, s) => acc + s[field], 0) / servers.length)
+    : 0;
 
-  // Calculate average CPU & RAM
-  const avgCpu = Math.round(servers.reduce((acc, s) => acc + s.cpuUsage, 0) / servers.length);
-  const avgMemory = Math.round(servers.reduce((acc, s) => acc + s.memoryUsage, 0) / servers.length);
-  const avgStorage = Math.round(servers.reduce((acc, s) => acc + s.storageUsage, 0) / servers.length);
+  const avgCpu = avgOf('cpuUsage');
+  const avgMemory = avgOf('memoryUsage');
+  const avgStorage = avgOf('storageUsage');
   const riskServers = servers
     .filter(s => s.status !== 'active' || s.cpuUsage > 80 || s.memoryUsage > 85 || s.storageUsage > 80)
     .slice(0, 3);
+  const riskAlerts = activeAlerts.slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -72,17 +85,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
           </div>
           <div className="text-2xl font-mono font-bold uppercase">{overallStatus}</div>
           <p className="text-[11px] font-sans mt-2 opacity-90">
-            {criticalCount > 0 ? 'Ada server critical yang butuh follow-up.' : warningCount > 0 ? 'Ada warning aktif, layanan tetap berjalan.' : 'Semua server terpantau normal.'}
+            {criticalSignalCount > 0 ? 'Ada sinyal critical yang butuh follow-up.' : warningSignalCount > 0 ? 'Ada warning aktif, layanan tetap berjalan.' : 'Semua server terpantau normal.'}
           </p>
         </div>
 
         <div className="bg-white border border-sky-200 p-5 shadow-xs">
           <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Uptime 30 Hari</span>
+            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Uptime Node</span>
             <Activity className="w-5 h-5 text-emerald-600" />
           </div>
-          <div className="text-2xl font-mono font-bold text-slate-900">99.82%</div>
-          <p className="text-[11px] text-slate-500 font-sans mt-2">Target SLA 99.5% masih terpenuhi bulan ini.</p>
+          <div className="text-2xl font-mono font-bold text-slate-900">{uptimeStatus}</div>
+          <p className="text-[11px] text-slate-500 font-sans mt-2">Uptime node dari Proxmox API.</p>
         </div>
 
         <div className="bg-white border border-sky-200 p-5 shadow-xs">
@@ -103,7 +116,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
             <Database className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="font-mono text-sm font-bold text-slate-900">{backupStatus}</div>
-          <p className="text-[11px] text-slate-500 font-sans mt-2">Semua snapshot utama sukses diverifikasi.</p>
+          <p className="text-[11px] text-slate-500 font-sans mt-2">{backupDetail}</p>
         </div>
 
         <div className="bg-white border border-sky-200 p-5 shadow-xs">
@@ -112,7 +125,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
             <Globe2 className="w-4 h-4 text-sky-600" />
           </div>
           <div className="font-mono text-sm font-bold text-slate-900">{sslStatus}</div>
-          <p className="text-[11px] text-slate-500 font-sans mt-2">Auto-renew aktif untuk domain terdaftar.</p>
+          <p className="text-[11px] text-slate-500 font-sans mt-2">Status koneksi domain/API dari sinkronisasi terakhir.</p>
         </div>
 
         <div onClick={() => onNavigateTab('alerts')} className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
@@ -121,16 +134,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
             <AlertTriangle className="w-4 h-4 text-amber-600" />
           </div>
           <div className="font-mono text-sm font-bold text-slate-900">{activeAlerts.length} issue dipantau</div>
-          <p className="text-[11px] text-slate-500 font-sans mt-2">Critical: {criticalCount}, Warning: {warningCount}</p>
+          <p className="text-[11px] text-slate-500 font-sans mt-2">Critical: {criticalAlertCount}, Warning: {warningAlertCount}</p>
         </div>
 
-        <div onClick={() => onNavigateTab('support')} className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
+        <div onClick={() => onNavigateTab('servers')} className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
           <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Support SLA</span>
-            <LifeBuoy className="w-4 h-4 text-sky-600" />
+            <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Koneksi Monitoring</span>
+            <PlugZap className="w-4 h-4 text-sky-600" />
           </div>
-          <div className="font-mono text-sm font-bold text-slate-900">1 tiket aktif</div>
-          <p className="text-[11px] text-slate-500 font-sans mt-2">Estimasi respons teknis: 15 menit.</p>
+          <div className="font-mono text-sm font-bold text-slate-900">{primaryServer?.connectionType || '-'}</div>
+          <p className="text-[11px] text-slate-500 font-sans mt-2">{connectionStatus}</p>
         </div>
       </div>
 
@@ -185,7 +198,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
             </div>
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-mono font-bold text-slate-900">{warningCount}</span>
+            <span className="text-2xl font-mono font-bold text-slate-900">{warningSignalCount}</span>
             <span className="text-[11px] text-amber-600 font-mono font-semibold">Investigating</span>
           </div>
           <div className="mt-2 text-[11px] text-slate-500 font-sans">
@@ -204,7 +217,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
             </div>
           </div>
           <div className="flex items-baseline space-x-2">
-            <span className="text-2xl font-mono font-bold text-slate-900">{criticalCount}</span>
+            <span className="text-2xl font-mono font-bold text-slate-900">{criticalSignalCount}</span>
             <span className="text-[11px] text-rose-600 font-mono font-semibold">Action Required</span>
           </div>
           <div className="mt-2 text-[11px] text-slate-500 font-sans">
@@ -227,8 +240,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {riskServers.map((srv) => (
+          {riskAlerts.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {riskAlerts.map((alert) => (
+                <div key={alert.id} className="p-4 bg-sky-50/40 border border-sky-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] font-bold text-slate-900 truncate">{alert.server}</span>
+                    <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 ${alert.severity === 'critical' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{alert.severity}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-sans">{alert.title}</p>
+                  <p className="text-[10px] text-slate-500 font-sans">{alert.actionTaken}</p>
+                </div>
+              ))}
+            </div>
+          ) : riskServers.length ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {riskServers.map((srv) => (
               <div key={srv.id} className="p-4 bg-sky-50/40 border border-sky-100 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[11px] font-bold text-slate-900 truncate">{srv.name}</span>
@@ -250,8 +277,13 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
                   View Detail
                 </button>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 font-mono text-xs">
+              Tidak ada risk aktif. CPU {avgCpu}% • RAM {avgMemory}% • Disk {avgStorage}%.
+            </div>
+          )}
         </div>
 
         <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
@@ -439,10 +471,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, onN
           <div className="p-4 bg-sky-900 text-white space-y-3">
             <div className="flex items-center space-x-2">
               <ShieldCheck className="w-4 h-4 text-sky-400" />
-              <span className="font-mono text-xs font-bold uppercase tracking-wider">Monitoring 24/7 Active</span>
+              <span className="font-mono text-xs font-bold uppercase tracking-wider">Monitoring Sinkron Aktif</span>
             </div>
             <p className="text-[11px] text-sky-200 font-sans">
-              Server dipantau otomatis. Alert, backup, SSL, dan issue utama tampil sebagai prioritas tindakan.
+              {connectionStatus}. Update terakhir: {lastUpdated}. Services: {onlineServices} online, {degradedServices} degraded, {offlineServices} offline.
             </p>
           </div>
         </div>

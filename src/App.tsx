@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { FeatureSection } from './components/FeatureSection';
@@ -12,17 +12,16 @@ import { Footer } from './components/Footer';
 import { AuthModal } from './components/AuthModal';
 import { PlanModal } from './components/PlanModal';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
-import { mockServers, mockAlerts, mockAutomations, mockMaintenances, mockBackups, mockTickets } from './data/mockDashboardData';
 import { DashboardData, fetchDashboardData } from './lib/supabaseRest';
 
 const initialDashboardData: DashboardData = {
-  servers: mockServers,
-  alerts: mockAlerts,
-  automations: mockAutomations,
-  maintenances: mockMaintenances,
-  backups: mockBackups,
-  tickets: mockTickets,
-  source: 'mock',
+  servers: [],
+  alerts: [],
+  automations: [],
+  maintenances: [],
+  backups: [],
+  tickets: [],
+  source: 'supabase',
 };
 
 export default function App() {
@@ -34,14 +33,18 @@ export default function App() {
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState({ name: 'PRO', price: 'Rp800.000' });
 
+  const loadDashboardData = useCallback(() => {
+    fetchDashboardData().then(setDashboardData);
+  }, []);
+
   useEffect(() => {
     if (!isLoggedIn) return;
-    fetchDashboardData().then(setDashboardData);
+    loadDashboardData();
     const interval = window.setInterval(() => {
-      fetchDashboardData().then(setDashboardData);
+      loadDashboardData();
     }, 15000);
     return () => window.clearInterval(interval);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, loadDashboardData]);
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
     setAuthMode(mode);
@@ -69,6 +72,7 @@ export default function App() {
         maintenances={dashboardData.maintenances}
         backups={dashboardData.backups}
         tickets={dashboardData.tickets}
+        onRefreshData={loadDashboardData}
         onLogout={() => setIsLoggedIn(false)}
       />
     );

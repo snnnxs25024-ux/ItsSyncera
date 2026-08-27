@@ -6,15 +6,6 @@ import {
   ServerItem,
   SupportTicket,
 } from '../types/dashboard';
-import {
-  mockAlerts,
-  mockAutomations,
-  mockBackups,
-  mockMaintenances,
-  mockServers,
-  mockTickets,
-} from '../data/mockDashboardData';
-
 export interface DashboardData {
   servers: ServerItem[];
   alerts: AlertItem[];
@@ -31,14 +22,14 @@ type TableName = 'servers' | 'alerts' | 'automations' | 'maintenances' | 'backup
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-const mockData: DashboardData = {
-  servers: mockServers,
-  alerts: mockAlerts,
-  automations: mockAutomations,
-  maintenances: mockMaintenances,
-  backups: mockBackups,
-  tickets: mockTickets,
-  source: 'mock',
+const emptyData: DashboardData = {
+  servers: [],
+  alerts: [],
+  automations: [],
+  maintenances: [],
+  backups: [],
+  tickets: [],
+  source: 'supabase',
 };
 
 const normalizeBaseUrl = (url: string) => url.replace(/\/$/, '').replace(/\/rest\/v1$/, '');
@@ -93,8 +84,11 @@ const mapAlert = (row: any): AlertItem => ({
 });
 
 export const fetchDashboardData = async (): Promise<DashboardData> => {
+  const api = await fetch('/api/dashboard').catch(() => null);
+  if (api?.ok) return api.json();
+
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('localhost')) {
-    return mockData;
+    return { ...emptyData, error: 'Supabase env belum tersedia' };
   }
 
   try {
@@ -108,17 +102,17 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
     ]);
 
     return {
-      servers: servers.length ? servers.map(mapServer) : mockServers,
-      alerts: alerts.length ? alerts.map(mapAlert) : mockAlerts,
-      automations: automations.length ? automations : mockAutomations,
-      maintenances: maintenances.length ? maintenances : mockMaintenances,
-      backups: backups.length ? backups : mockBackups,
-      tickets: tickets.length ? tickets : mockTickets,
+      servers: servers.map(mapServer),
+      alerts: alerts.map(mapAlert),
+      automations,
+      maintenances,
+      backups,
+      tickets,
       source: 'supabase',
     };
   } catch (err) {
     return {
-      ...mockData,
+      ...emptyData,
       error: err instanceof Error ? err.message : 'Supabase connection failed',
     };
   }

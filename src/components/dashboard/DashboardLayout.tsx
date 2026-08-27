@@ -23,6 +23,7 @@ interface DashboardLayoutProps {
   maintenances: MaintenanceItem[];
   backups: BackupItem[];
   tickets: SupportTicket[];
+  onRefreshData: () => void;
   onLogout: () => void;
 }
 
@@ -33,6 +34,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   maintenances,
   backups,
   tickets,
+  onRefreshData,
   onLogout
 }) => {
   const [currentTab, setCurrentTab] = useState<DashboardTab>('overview');
@@ -46,14 +48,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const fetchServers = async () => {
     try {
-      const res = await fetch('/api/servers');
-      const data = await res.json();
-      if (data.success && data.servers) {
-        setServers(data.servers);
-        if (selectedServer) {
-          const updated = data.servers.find((s: ServerItem) => s.id === selectedServer.id);
-          if (updated) setSelectedServer(updated);
-        }
+      onRefreshData();
+      if (selectedServer) {
+        const updated = initialServers.find((s: ServerItem) => s.id === selectedServer.id);
+        if (updated) setSelectedServer(updated);
       }
     } catch (err) {
       // ignore
@@ -224,6 +222,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <OverviewView 
               servers={servers} 
               alerts={alerts} 
+              backups={backups}
               onNavigateTab={(tab) => setCurrentTab(tab)} 
               onSelectServer={(srv) => setSelectedServer(srv)} 
             />
