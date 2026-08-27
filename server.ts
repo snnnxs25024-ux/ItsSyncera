@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import handlerAgentHeartbeat from './api/agent/heartbeat';
 import handlerAgentInstall from './api/agent/install';
+import handlerAutomationRun from './api/automation/run';
 import handlerDashboard from './api/dashboard';
 import handlerServers from './api/servers';
 
@@ -16,6 +17,8 @@ async function startServer() {
 
   // API Routes
   app.get("/api/dashboard", runHandler(handlerDashboard));
+  app.get("/api/automation/run", runHandler(handlerAutomationRun));
+  app.post("/api/automation/run", runHandler(handlerAutomationRun));
   app.get("/api/agent/install", runHandler(handlerAgentInstall));
   app.post("/api/agent/heartbeat", runHandler(handlerAgentHeartbeat));
   app.get("/api/servers", runHandler(handlerServers));

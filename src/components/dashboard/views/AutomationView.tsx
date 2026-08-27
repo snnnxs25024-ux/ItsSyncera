@@ -55,11 +55,14 @@ const defaultRules: AutomationRule[] = [
 
 export const AutomationView: React.FC<AutomationViewProps> = ({ automations, automationRules, automationRuns }) => {
   const [selectedFilter, setSelectedFilter] = useState<AutomationFilter>('all');
+  const [runs, setRuns] = useState<AutomationRun[]>(automationRuns);
+  const [runningId, setRunningId] = useState<string | null>(null);
+  const [message, setMessage] = useState<string>('');
   const filteredAutomations = automations.filter((automation) => matchesFilter(automation, selectedFilter));
   const activeCount = automations.filter((automation) => automation.status === 'active').length;
   const pausedCount = automations.filter((automation) => automation.status === 'paused').length;
   const runningCount = automations.filter((automation) => automation.status === 'running').length;
-  const totalRuns = automations.reduce((acc, automation) => acc + Number(automation.historyCount || 0), 0) + automationRuns.length;
+  const totalRuns = automations.reduce((acc, automation) => acc + Number(automation.historyCount || 0), 0) + runs.length;
   const visibleRules = automationRules.length ? automationRules : defaultRules;
   const filters: { id: AutomationFilter; label: string }[] = [
     { id: 'all', label: 'All' },
@@ -67,6 +70,28 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
     { id: 'running', label: 'Running' },
     { id: 'paused', label: 'Paused' },
   ];
+
+  React.useEffect(() => setRuns(automationRuns), [automationRuns]);
+
+  const runAutomation = async (automation: AutomationItem) => {
+    setRunningId(automation.id);
+    setMessage('');
+    try {
+      const res = await fetch('/api/automation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ automationId: automation.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+      setRuns((current) => [data.run, ...current].slice(0, 50));
+      setMessage(`Run selesai: ${data.run.status}`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Run automation gagal');
+    } finally {
+      setRunningId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -76,16 +101,13 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
           <h1 className="text-xl font-mono font-bold uppercase tracking-wide text-slate-900">Automation Control</h1>
           <p className="text-xs text-slate-500 font-sans mt-1">Rules, jadwal, run history, safety approval. Data real dari automation tables.</p>
         </div>
-        <button
-          type="button"
-          disabled
-          title="Manual trigger belum dihubungkan ke API aksi aman."
-          className="px-4 py-2.5 bg-slate-100 text-slate-500 font-mono text-xs uppercase font-bold border border-slate-200 shadow-xs flex items-center space-x-2 cursor-not-allowed"
-        >
+        <div className="px-4 py-2.5 bg-sky-50 text-sky-700 font-mono text-xs uppercase font-bold border border-sky-200 shadow-xs flex items-center space-x-2">
           <Lock className="w-3.5 h-3.5" />
-          <span>Manual Trigger Locked</span>
-        </button>
+          <span>Risky Actions Locked</span>
+        </div>
       </div>
+
+      {message ? <div className="bg-white border border-sky-200 p-3 font-mono text-xs text-slate-700 shadow-xs">{message}</div> : null}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -207,6 +229,16 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
                   <span className="text-slate-500">Total executions</span>
                   <span className="font-bold text-slate-900">{Number(automation.historyCount || 0).toLocaleString('id-ID')}</span>
                 </div>
+
+                <button
+                  type="button"
+                  disabled={runningId === automation.id}
+                  onClick={() => runAutomation(automation)}
+                  className="w-full px-4 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-500 text-white font-mono text-xs uppercase font-bold border border-sky-400 shadow-xs flex items-center justify-center space-x-2"
+                >
+                  {runningId === automation.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  <span>{runningId === automation.id ? 'Running Check' : 'Run Safe Check'}</span>
+                </button>
               </article>
             ))}
           </div>
@@ -225,16 +257,16 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
             <History className="w-4 h-4 text-sky-600" />
             <span>Run History</span>
           </h2>
-          <span className="text-[10px] font-mono text-slate-500 uppercase">{automationRuns.length} real run logs</span>
+          <span className="text-[10px] font-mono text-slate-500 uppercase">{runs.length} real run logs</span>
         </div>
-        {automationRuns.length ? (
+        {runs.length ? (
           <div className="overflow-x-auto border border-sky-100">
             <table className="w-full text-left font-mono text-xs">
               <thead className="bg-sky-50/70 border-b border-sky-200 text-slate-600 text-[10px] uppercase">
                 <tr><th className="p-3">Automation</th><th className="p-3">Target</th><th className="p-3">Status</th><th className="p-3">Started</th><th className="p-3">Finished</th><th className="p-3">Message</th></tr>
               </thead>
               <tbody className="divide-y divide-sky-100">
-                {automationRuns.map((run) => (
+                {runs.map((run) => (
                   <tr key={run.id} className="hover:bg-sky-50/30 transition-colors">
                     <td className="p-3 font-bold text-slate-900">{run.automationName}</td>
                     <td className="p-3 text-slate-600"><Server className="w-3 h-3 inline mr-1" />{run.targetServer}</td>
