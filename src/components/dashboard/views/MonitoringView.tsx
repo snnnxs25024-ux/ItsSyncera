@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, Wifi, CheckCircle2, AlertTriangle, Server, TimerReset, Database } from 'lucide-react';
+import { Activity, Wifi, CheckCircle2, AlertTriangle, Server, TimerReset, Database, Radio } from 'lucide-react';
 import { MetricSnapshot, ServerItem } from '../../../types/dashboard';
 
 interface MonitoringViewProps {
@@ -9,7 +9,6 @@ interface MonitoringViewProps {
 
 type Risk = 'Aman' | 'Warning' | 'Critical';
 type Range = 'realtime' | '1h' | '24h' | '7d' | '30d';
-
 type Field = 'cpuUsage' | 'memoryUsage' | 'storageUsage';
 
 const riskOf = (server: ServerItem): Risk => {
@@ -43,10 +42,9 @@ const avgOf = (servers: ServerItem[], field: Field) => servers.length
   : 0;
 
 const inRange = (snapshot: MetricSnapshot, range: Range) => {
-  if (range === 'realtime') return true;
   const created = new Date(snapshot.createdAt).getTime();
   if (!created) return false;
-  const hours = range === '1h' ? 1 : range === '24h' ? 24 : range === '7d' ? 168 : 720;
+  const hours = range === 'realtime' ? 1 : range === '1h' ? 1 : range === '24h' ? 24 : range === '7d' ? 168 : 720;
   return created >= Date.now() - hours * 60 * 60 * 1000;
 };
 
@@ -56,64 +54,121 @@ const timeLabel = (value: string) => {
   return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
 
+const shortTime = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+};
+
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-const compact = (points: MetricSnapshot[], max = 80) => {
+const compact = (points: MetricSnapshot[], max = 96) => {
   if (points.length <= max) return points;
   const step = Math.ceil(points.length / max);
   return points.filter((_, i) => i % step === 0 || i === points.length - 1);
 };
 
-const pointsPath = (points: MetricSnapshot[], field: Field, width: number, height: number) => {
-  const n = Math.max(points.length - 1, 1);
-  return points.map((point, i) => {
-    const x = (i / n) * width;
-    const y = height - (clamp(point[field], 0, 100) / 100) * height;
-    return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-  }).join(' ');
+const trend = (points: MetricSnapshot[], field: Field) => {
+  const latest = points.at(-1)?.[field] ?? 0;
+  const prev = points.at(-2)?.[field] ?? latest;
+  const diff = latest - prev;
+  return `${diff > 0 ? '+' : ''}${diff}%`;
 };
 
-const LineChart = ({ title, field, snapshots, color, softColor }: { title: string; field: Field; snapshots: MetricSnapshot[]; color: string; softColor: string }) => {
-  const points = compact(snapshots.slice(-240));
-  const latest = points.at(-1)?.[field] ?? 0;
+const xy = (points: MetricSnapshot[], field: Field, index: number) => {
+  const width = 760;
+  const height = 280;
+  const pad = { left: 46, right: 18, top: 18, bottom: 34 };
+  const chartW = width - pad.left - pad.right;
+  const chartH = height - pad.top - pad.bottom;
+  const x = pad.left + (index / Math.max(points.length - 1, 1)) * chartW;
+  const y = pad.top + (1 - clamp(points[index][field], 0, 100) / 100) * chartH;
+  return { x, y };
+};
+
+const pathFor = (points: MetricSnapshot[], field: Field) => points.map((_, i) => {
+  const point = xy(points, field, i);
+  return `${i === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+}).join(' ');
+
+const LiveLineChart = ({ server, snapshots }: { server?: ServerItem; snapshots: MetricSnapshot[] }) => {
+  const points = compact(snapshots.slice(-120));
+  const latest = points.at(-1);
+  const lines: { label: string; field: Field; color: string; soft: string }[] = [
+    { label: 'CPU', field: 'cpuUsage', color: '#38bdf8', soft: 'bg-sky-500/10 text-sky-700 border-sky-200' },
+    { label: 'RAM', field: 'memoryUsage', color: '#22c55e', soft: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
+    { label: 'Disk', field: 'storageUsage', color: '#f59e0b', soft: 'bg-amber-500/10 text-amber-700 border-amber-200' },
+  ];
+
   if (points.length < 2) {
     return (
-      <div className="p-5 bg-sky-50/30 border border-sky-200 space-y-3">
-        <div className="flex justify-between items-center">
-          <span className="font-mono text-xs font-bold text-slate-900 uppercase">{title}</span>
+      <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-sky-600" />
+            <span>Live Resource Line Chart</span>
+          </h2>
           <span className="text-[10px] font-mono text-slate-500">{points.length} snapshot</span>
         </div>
-        <div className="h-44 border border-dashed border-sky-200 bg-white flex items-center justify-center text-center p-4">
-          <p className="text-[11px] text-slate-500 font-sans">History belum cukup. Minimal 2 snapshot untuk line chart real.</p>
+        <div className="h-64 border border-dashed border-sky-200 bg-sky-50/30 flex items-center justify-center text-center p-4">
+          <p className="text-xs text-slate-500 font-sans">History belum cukup. Minimal 2 snapshot untuk line chart real.</p>
         </div>
       </div>
     );
   }
-  const path = pointsPath(points, field, 360, 140);
-  const fill = `${path} L 360 140 L 0 140 Z`;
+
   return (
-    <div className="p-5 bg-sky-50/30 border border-sky-200 space-y-4">
-      <div className="flex justify-between items-center">
-        <span className="font-mono text-xs font-bold text-slate-900 uppercase">{title}</span>
-        <span className="text-[10px] font-mono text-sky-600">Latest: {latest}% • {points.length} pts</span>
-      </div>
-      <div className="relative bg-white border border-sky-100 p-3">
-        <svg viewBox="0 0 360 160" className="w-full h-48" role="img" aria-label={`${title} line chart`}>
-          {[25, 50, 75].map((line) => <line key={line} x1="0" x2="360" y1={140 - line * 1.4} y2={140 - line * 1.4} stroke="#e2e8f0" strokeWidth="1" />)}
-          <line x1="0" x2="360" y1="35" y2="35" stroke="#f59e0b" strokeDasharray="4 4" strokeWidth="1" />
-          <line x1="0" x2="360" y1="14" y2="14" stroke="#ef4444" strokeDasharray="4 4" strokeWidth="1" />
-          <path d={fill} fill={softColor} opacity="0.18" />
-          <path d={path} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          {points.map((point, i) => {
-            const x = (i / Math.max(points.length - 1, 1)) * 360;
-            const y = 140 - (clamp(point[field], 0, 100) / 100) * 140;
-            return <circle key={point.id + field} cx={x} cy={y} r={i === points.length - 1 ? 4 : 2} fill={color} opacity={i === points.length - 1 ? 1 : .55} />;
-          })}
-        </svg>
-        <div className="flex justify-between text-[10px] font-mono text-slate-500">
-          <span>{timeLabel(points[0].createdAt)}</span>
-          <span>warning 75% • critical 90%</span>
-          <span>{timeLabel(points.at(-1)?.createdAt || '')}</span>
+    <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+            <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+            <span>Live Resource Line Chart</span>
+          </h2>
+          <p className="text-[11px] text-slate-500 font-sans mt-1">Target: {server?.name || latest?.serverName || 'server'} • titik terbaru {timeLabel(latest?.createdAt || '')}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          {lines.map((line) => (
+            <div key={line.field} className={`px-3 py-2 border font-mono text-xs ${line.soft}`}>
+              <span className="text-[10px] uppercase block">{line.label}</span>
+              <span className="font-bold text-base">{latest?.[line.field] ?? 0}%</span>
+              <span className="text-[10px] ml-2">{trend(points, line.field)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-slate-950 border border-slate-800 p-3 md:p-4 overflow-hidden">
+        <svg viewBox="0 0 760 280" className="w-full h-[280px]" role="img" aria-label="Live CPU RAM Disk line chart">
+          <rect x="0" y="0" width="760" height="280" fill="#020617" />
+          {[0, 25, 50, 75, 100].map((value) => {
+            const y = 18 + (1 - value / 100) * 228;
+            return (
+              <g key={value}>
+                <line x1="46" x2="742" y1={y} y2={y} stroke={value === 75 ? '#eab308' : value === 100 ? '#ef4444' : '#1e293b'} strokeWidth="1" strokeDasharray={value === 75 ? '6 6' : '0'} />
+                <text x="10" y={y + 4} fill="#94a3b8" fontSize="11" fontFamily="monospace">{value}%</text>
+              </g>
+            );
+          })}
+          {points.map((_, i) => {
+            if (i % Math.max(1, Math.floor(points.length / 8)) !== 0 && i !== points.length - 1) return null;
+            const point = xy(points, 'cpuUsage', i);
+            return <line key={i} x1={point.x} x2={point.x} y1="18" y2="246" stroke="#0f172a" strokeWidth="1" />;
+          })}
+          {lines.map((line) => <path key={line.field} d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />)}
+          {lines.map((line) => {
+            const point = xy(points, line.field, points.length - 1);
+            return (
+              <g key={line.field + '-dot'}>
+                <circle cx={point.x} cy={point.y} r="8" fill={line.color} opacity="0.16" className="animate-pulse" />
+                <circle cx={point.x} cy={point.y} r="4" fill={line.color} />
+                <text x={point.x - 12} y={point.y - 12} fill={line.color} fontSize="11" fontFamily="monospace" fontWeight="700">{latest?.[line.field]}%</text>
+              </g>
+            );
+          })}
+          <text x="46" y="272" fill="#94a3b8" fontSize="11" fontFamily="monospace">{shortTime(points[0].createdAt)}</text>
+          <text x="360" y="272" fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="middle">warning 75% • critical 90%</text>
+          <text x="742" y="272" fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="end">{shortTime(latest?.createdAt || '')}</text>
+        </svg>
       </div>
     </div>
   );
@@ -126,11 +181,15 @@ export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricS
   const degradedServices = services.filter(s => s.status === 'degraded').length;
   const offlineServices = services.filter(s => s.status === 'offline').length;
   const latestUpdate = servers.map(s => s.lastSeen || s.lastCheck).filter(Boolean).sort().at(-1) || 'Belum ada data';
-  const filteredSnapshots = metricSnapshots.filter(s => inRange(s, timeRange));
   const activeCount = servers.filter(s => s.status === 'active').length;
   const warningCount = servers.filter(s => s.status === 'warning').length;
   const criticalCount = servers.filter(s => s.status === 'critical').length;
   const waitingCount = servers.filter(s => s.status === 'waiting').length;
+  const chartServer = servers[0];
+  const filteredSnapshots = metricSnapshots
+    .filter(s => inRange(s, timeRange))
+    .filter(s => !chartServer || s.serverId === chartServer.id)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   return (
     <div className="space-y-6">
@@ -138,7 +197,7 @@ export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricS
         <div>
           <span className="font-mono text-[10px] text-sky-600 uppercase tracking-widest font-semibold block mb-1">Monitoring Center</span>
           <h1 className="text-xl font-mono font-bold uppercase tracking-wide text-slate-900">Live Monitoring Chart</h1>
-          <p className="text-xs text-slate-500 font-sans mt-1">Line chart bergerak dari snapshot real. Data baru masuk tiap 1 menit, UI refresh otomatis.</p>
+          <p className="text-xs text-slate-500 font-sans mt-1">Grafik gabungan CPU/RAM/Disk. Snapshot real tiap 1 menit, UI cek data tiap 5 detik.</p>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto max-w-full">
           {(['realtime', '1h', '24h', '7d', '30d'] as const).map((range) => (
@@ -177,20 +236,10 @@ export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricS
         <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Avg CPU</span><span className="text-3xl font-mono font-bold text-sky-600">{avgOf(servers, 'cpuUsage')}%</span></div>
         <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Avg RAM</span><span className="text-3xl font-mono font-bold text-emerald-600">{avgOf(servers, 'memoryUsage')}%</span></div>
         <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Avg Disk</span><span className="text-3xl font-mono font-bold text-amber-600">{avgOf(servers, 'storageUsage')}%</span></div>
-        <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Last Update</span><span className="text-sm font-mono font-bold text-slate-900">{latestUpdate}</span><p className="text-[11px] text-slate-500 font-sans mt-2">Snapshot: {filteredSnapshots.length}</p></div>
+        <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Last Update</span><span className="text-sm font-mono font-bold text-slate-900">{latestUpdate}</span><p className="text-[11px] text-slate-500 font-sans mt-2">Live points: {filteredSnapshots.length}</p></div>
       </div>
 
-      <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
-        <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-sky-600" />
-          <span>Live Resource Line Chart ({timeRange.toUpperCase()})</span>
-        </h2>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <LineChart title="CPU History" field="cpuUsage" snapshots={filteredSnapshots} color="#0ea5e9" softColor="#0ea5e9" />
-          <LineChart title="RAM History" field="memoryUsage" snapshots={filteredSnapshots} color="#10b981" softColor="#10b981" />
-          <LineChart title="Disk History" field="storageUsage" snapshots={filteredSnapshots} color="#f59e0b" softColor="#f59e0b" />
-        </div>
-      </div>
+      <LiveLineChart server={chartServer} snapshots={filteredSnapshots} />
 
       <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
         <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2"><Database className="w-4 h-4 text-sky-600" /><span>Resource Usage Table</span></h2>

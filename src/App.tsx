@@ -43,7 +43,7 @@ export default function App() {
     loadDashboardData();
     const interval = window.setInterval(() => {
       loadDashboardData();
-    }, 15000);
+    }, 5000);
     return () => window.clearInterval(interval);
   }, [isLoggedIn, loadDashboardData]);
 
