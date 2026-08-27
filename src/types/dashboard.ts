@@ -68,6 +68,30 @@ export interface AutomationItem {
   historyCount: number;
 }
 
+export interface AutomationRule {
+  id: string;
+  name: string;
+  metric: 'cpu' | 'memory' | 'disk' | 'website' | 'ssl' | 'service';
+  condition: string;
+  threshold: string;
+  action: string;
+  severity: 'critical' | 'warning' | 'information';
+  approvalRequired: boolean;
+  status: 'active' | 'paused';
+  updatedAt: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  automationId: string;
+  automationName: string;
+  targetServer: string;
+  status: 'success' | 'failed' | 'running' | 'blocked';
+  startedAt: string;
+  finishedAt: string;
+  message: string;
+}
+
 export interface MaintenanceItem {
   id: string;
   title: string;

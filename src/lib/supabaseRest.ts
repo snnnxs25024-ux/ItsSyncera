@@ -1,6 +1,8 @@
 import {
   AlertItem,
   AutomationItem,
+  AutomationRule,
+  AutomationRun,
   BackupItem,
   MaintenanceItem,
   MetricSnapshot,
@@ -11,6 +13,8 @@ export interface DashboardData {
   servers: ServerItem[];
   alerts: AlertItem[];
   automations: AutomationItem[];
+  automationRules: AutomationRule[];
+  automationRuns: AutomationRun[];
   maintenances: MaintenanceItem[];
   backups: BackupItem[];
   tickets: SupportTicket[];
@@ -19,7 +23,7 @@ export interface DashboardData {
   error?: string;
 }
 
-type TableName = 'servers' | 'alerts' | 'automations' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots';
+type TableName = 'servers' | 'alerts' | 'automations' | 'automation_rules' | 'automation_runs' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -28,6 +32,8 @@ const emptyData: DashboardData = {
   servers: [],
   alerts: [],
   automations: [],
+  automationRules: [],
+  automationRuns: [],
   maintenances: [],
   backups: [],
   tickets: [],
@@ -58,7 +64,7 @@ const readOptionalTable = async <T>(table: TableName): Promise<T[]> => {
   try {
     return await readTable<T>(table);
   } catch (err) {
-    if (err instanceof Error && err.message.includes('metric_snapshots')) return [];
+    if (err instanceof Error && ['metric_snapshots', 'automation_rules', 'automation_runs'].some((tableName) => err.message.includes(tableName))) return [];
     throw err;
   }
 };
@@ -106,6 +112,40 @@ const mapMetricSnapshot = (row: any): MetricSnapshot => ({
   createdAt: row.created_at ?? row.createdAt ?? '',
 });
 
+const mapAutomation = (row: any): AutomationItem => ({
+  id: String(row.id),
+  name: row.name ?? 'Untitled automation',
+  type: row.type ?? 'monitoring',
+  status: row.status ?? 'paused',
+  schedule: row.schedule ?? '-',
+  lastExecution: row.last_execution ?? row.lastExecution ?? '-',
+  historyCount: Number(row.history_count ?? row.historyCount ?? 0),
+});
+
+const mapAutomationRule = (row: any): AutomationRule => ({
+  id: String(row.id),
+  name: row.name ?? 'Untitled rule',
+  metric: row.metric ?? 'cpu',
+  condition: row.condition ?? '>',
+  threshold: String(row.threshold ?? '-'),
+  action: row.action ?? '-',
+  severity: row.severity ?? 'information',
+  approvalRequired: Boolean(row.approval_required ?? row.approvalRequired ?? false),
+  status: row.status ?? 'paused',
+  updatedAt: row.updated_at ?? row.updatedAt ?? '-',
+});
+
+const mapAutomationRun = (row: any): AutomationRun => ({
+  id: String(row.id),
+  automationId: row.automation_id ?? row.automationId ?? '',
+  automationName: row.automation_name ?? row.automationName ?? '-',
+  targetServer: row.target_server ?? row.targetServer ?? '-',
+  status: row.status ?? 'blocked',
+  startedAt: row.started_at ?? row.startedAt ?? '-',
+  finishedAt: row.finished_at ?? row.finishedAt ?? '-',
+  message: row.message ?? '-',
+});
+
 export const fetchDashboardData = async (): Promise<DashboardData> => {
   const api = await fetch('/api/dashboard').catch(() => null);
   if (api?.ok) return api.json();
@@ -115,10 +155,12 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   }
 
   try {
-    const [servers, alerts, automations, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
+    const [servers, alerts, automations, automationRules, automationRuns, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
       readTable<any>('servers'),
       readTable<any>('alerts'),
-      readTable<AutomationItem>('automations'),
+      readTable<any>('automations'),
+      readOptionalTable<any>('automation_rules'),
+      readOptionalTable<any>('automation_runs'),
       readTable<MaintenanceItem>('maintenances'),
       readTable<BackupItem>('backups'),
       readTable<SupportTicket>('support_tickets'),
@@ -128,7 +170,9 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
     return {
       servers: servers.map(mapServer),
       alerts: alerts.map(mapAlert),
-      automations,
+      automations: automations.map(mapAutomation),
+      automationRules: automationRules.map(mapAutomationRule),
+      automationRuns: automationRuns.map(mapAutomationRun),
       maintenances,
       backups,
       tickets,

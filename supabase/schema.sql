@@ -55,9 +55,35 @@ create table if not exists automations (
   type text not null check (type in ('backup', 'restart', 'cleanup', 'health_check', 'monitoring')),
   status text not null check (status in ('active', 'paused', 'running')),
   schedule text not null,
-  "lastExecution" text not null,
-  "historyCount" integer not null default 0
+  last_execution text not null default '-',
+  history_count integer not null default 0
 );
+
+create table if not exists automation_rules (
+  id text primary key,
+  name text not null,
+  metric text not null check (metric in ('cpu', 'memory', 'disk', 'website', 'ssl', 'service')),
+  condition text not null default '>',
+  threshold text not null,
+  action text not null,
+  severity text not null default 'warning' check (severity in ('critical', 'warning', 'information')),
+  approval_required boolean not null default false,
+  status text not null default 'active' check (status in ('active', 'paused')),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists automation_runs (
+  id text primary key,
+  automation_id text references automations(id) on delete set null,
+  automation_name text not null,
+  target_server text not null default '-',
+  status text not null check (status in ('success', 'failed', 'running', 'blocked')),
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  message text not null default '-'
+);
+
+create index if not exists automation_runs_started_idx on automation_runs(started_at desc);
 
 create table if not exists maintenances (
   id text primary key,
@@ -91,6 +117,8 @@ alter table servers enable row level security;
 alter table alerts enable row level security;
 alter table metric_snapshots enable row level security;
 alter table automations enable row level security;
+alter table automation_rules enable row level security;
+alter table automation_runs enable row level security;
 alter table maintenances enable row level security;
 alter table backups enable row level security;
 alter table support_tickets enable row level security;
@@ -106,6 +134,12 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read automations" on automations for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read automation_rules" on automation_rules for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read automation_runs" on automation_runs for select using (true);
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read maintenances" on maintenances for select using (true);

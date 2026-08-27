@@ -3,7 +3,7 @@ import {
   Server, Activity, AlertTriangle, RefreshCw, ShieldCheck, 
   HardDrive, FileText, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Bell 
 } from 'lucide-react';
-import { DashboardTab, ServerItem, AlertItem, AutomationItem, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
+import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
 import { OverviewView } from './views/OverviewView';
 import { ServersView } from './views/ServersView';
 import { MonitoringView } from './views/MonitoringView';
@@ -20,6 +20,8 @@ interface DashboardLayoutProps {
   servers: ServerItem[];
   alerts: AlertItem[];
   automations: AutomationItem[];
+  automationRules: AutomationRule[];
+  automationRuns: AutomationRun[];
   maintenances: MaintenanceItem[];
   backups: BackupItem[];
   tickets: SupportTicket[];
@@ -32,6 +34,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   servers: initialServers,
   alerts,
   automations,
+  automationRules,
+  automationRuns,
   maintenances,
   backups,
   tickets,
@@ -239,7 +243,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           )}
           {currentTab === 'monitoring' && <MonitoringView servers={servers} metricSnapshots={metricSnapshots} />}
           {currentTab === 'alerts' && <AlertsView alerts={alerts} />}
-          {currentTab === 'automation' && <AutomationView automations={automations} />}
+          {currentTab === 'automation' && <AutomationView automations={automations} automationRules={automationRules} automationRuns={automationRuns} />}
           {currentTab === 'maintenance' && <MaintenanceView maintenances={maintenances} />}
           {currentTab === 'backup' && <BackupView backups={backups} />}
           {currentTab === 'reports' && <ReportsView />}

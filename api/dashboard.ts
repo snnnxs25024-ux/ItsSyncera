@@ -33,7 +33,7 @@ const readOptionalTable = async (table: string) => {
   try {
     return await readTable(table);
   } catch (err) {
-    if (err instanceof ApiError && err.message.includes("Could not find the table")) return [];
+    if (err instanceof ApiError && (err.message.includes("Could not find the table") || ['metric_snapshots', 'automation_rules', 'automation_runs'].some((name) => err.message.includes(name)))) return [];
     throw err;
   }
 };
@@ -81,12 +81,50 @@ const mapMetricSnapshot = (row: Row) => ({
   createdAt: row.created_at ?? '',
 });
 
+const mapAutomation = (row: Row) => ({
+  id: String(row.id),
+  name: row.name ?? 'Untitled automation',
+  type: row.type ?? 'monitoring',
+  status: row.status ?? 'paused',
+  schedule: row.schedule ?? '-',
+  lastExecution: row.last_execution ?? row.lastExecution ?? '-',
+  historyCount: Number(row.history_count ?? row.historyCount ?? 0),
+});
+
+const mapAutomationRule = (row: Row) => ({
+  id: String(row.id),
+  name: row.name ?? 'Untitled rule',
+  metric: row.metric ?? 'cpu',
+  condition: row.condition ?? '>',
+  threshold: String(row.threshold ?? '-'),
+  action: row.action ?? '-',
+  severity: row.severity ?? 'information',
+  approvalRequired: Boolean(row.approval_required ?? row.approvalRequired ?? false),
+  status: row.status ?? 'paused',
+  updatedAt: row.updated_at ?? row.updatedAt ?? '-',
+});
+
+const mapAutomationRun = (row: Row) => ({
+  id: String(row.id),
+  automationId: row.automation_id ?? row.automationId ?? '',
+  automationName: row.automation_name ?? row.automationName ?? '-',
+  targetServer: row.target_server ?? row.targetServer ?? '-',
+  status: row.status ?? 'blocked',
+  startedAt: row.started_at ?? row.startedAt ?? '-',
+  finishedAt: row.finished_at ?? row.finishedAt ?? '-',
+  message: row.message ?? '-',
+});
+
+const sortByNewest = (a: Row, b: Row) => String(b.started_at ?? b.created_at ?? '').localeCompare(String(a.started_at ?? a.created_at ?? ''));
+
 export default async function handler(_req: any, res: any) {
   try {
-    const [servers, alerts, automations, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
+    const [servers, alerts, automations, automationRules, automationRuns, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
       readTable('servers'),
       readTable('alerts'),
       readTable('automations'),
+      readOptionalTable('automation_rules'),
+      readOptionalTable('automation_runs'),
       readTable('maintenances'),
       readTable('backups'),
       readTable('support_tickets'),
@@ -95,7 +133,9 @@ export default async function handler(_req: any, res: any) {
     return res.status(200).json({
       servers: servers.map(mapServer),
       alerts: alerts.map(mapAlert),
-      automations,
+      automations: automations.map(mapAutomation),
+      automationRules: automationRules.map(mapAutomationRule),
+      automationRuns: automationRuns.sort(sortByNewest).slice(0, 50).map(mapAutomationRun),
       maintenances,
       backups,
       tickets,

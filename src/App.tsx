@@ -18,6 +18,8 @@ const initialDashboardData: DashboardData = {
   servers: [],
   alerts: [],
   automations: [],
+  automationRules: [],
+  automationRuns: [],
   maintenances: [],
   backups: [],
   tickets: [],
@@ -70,6 +72,8 @@ export default function App() {
         servers={dashboardData.servers}
         alerts={dashboardData.alerts}
         automations={dashboardData.automations}
+        automationRules={dashboardData.automationRules}
+        automationRuns={dashboardData.automationRuns}
         maintenances={dashboardData.maintenances}
         backups={dashboardData.backups}
         tickets={dashboardData.tickets}
