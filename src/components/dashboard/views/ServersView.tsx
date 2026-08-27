@@ -26,7 +26,8 @@ const connectionLabel = (type?: ConnectionType) =>
 export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServer, onSelectServer, onRefreshServers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [localServers, setLocalServers] = useState<ServerItem[]>([]);
+  const [formError, setFormError] = useState('');
+  const [formStatus, setFormStatus] = useState<'idle' | 'saving'>('idle');
   
   // Add Server modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -41,7 +42,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const [createdServer, setCreatedServer] = useState<ServerItem | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const allServers = [...servers, ...localServers];
+  const allServers = servers;
   const filteredServers = allServers.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.ipAddress.includes(searchTerm) || s.provider.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
@@ -58,49 +59,49 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
     setServerLocation('Jakarta DC');
     setCreatedServer(null);
     setCopied(false);
+    setFormError('');
+    setFormStatus('idle');
   };
 
-  const handleAddServerSubmit = (e: React.FormEvent) => {
+  const handleAddServerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serverName || !serverIp) return;
-    const newServer: ServerItem = {
-      id: `srv-pending-${Date.now()}`,
-      name: serverName,
-      status: 'waiting',
-      os: serverOs,
-      ipAddress: serverIp,
-      provider: serverProvider,
-      location: serverLocation,
-      cpuUsage: 0,
-      memoryUsage: 0,
-      storageUsage: 0,
-      networkTraffic: '-',
-      lastCheck: 'Waiting for Backend',
-      connectionType,
-      connectionStatus: connectionType === 'ssh'
-        ? `Waiting for Backend: SSH ${sshUsername}@${serverIp}:${sshPort}`
-        : connectionType === 'proxmox'
-          ? 'Waiting for Backend: Proxmox API credential check'
-          : 'Waiting for Agent: install command belum dijalankan',
-      uptime30d: '-',
-      backupStatus: 'Not configured',
-      sslStatus: 'Not checked',
-      lastSeen: 'Never',
-      services: [
-        { name: 'Connection Probe', status: 'offline', response: 'Waiting for Backend' },
-        { name: 'Telemetry Collector', status: 'offline', response: 'Not started' }
-      ]
-    };
-    setLocalServers(prev => [newServer, ...prev]);
-    setCreatedServer(newServer);
+    setFormError('');
+    if (!serverName.trim() || !serverIp.trim()) {
+      setFormError('Nama server dan IP/domain wajib diisi.');
+      return;
+    }
+    setFormStatus('saving');
+    try {
+      const res = await fetch('/api/servers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: serverName,
+          ipAddress: serverIp,
+          os: serverOs,
+          provider: serverProvider,
+          location: serverLocation,
+          connectionType,
+          sshPort: connectionType === 'ssh' ? sshPort : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || `Gagal menyimpan server (${res.status})`);
+      setCreatedServer(data.server);
+      if (onRefreshServers) onRefreshServers();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Gagal menyimpan server.');
+    } finally {
+      setFormStatus('idle');
+    }
   };
 
   const copyAgentCommand = (serverId: string) => {
     const cmd = connectionType === 'ssh'
-      ? `ssh ${sshUsername}@${serverIp} -p ${sshPort} "hostname && uptime && free -m && df -h"`
+      ? `SSH target saved: ${serverIp}:${sshPort}`
       : connectionType === 'proxmox'
-        ? `curl -k https://${serverIp}:8006/api2/json/version`
-        : `curl -fsSL https://its-syncera.vercel.app/api/agent/install.sh | bash -s -- ${serverId} TOKEN_RAHASIA`;
+        ? `Proxmox target saved: ${serverIp}`
+        : `Agent target saved: ${serverId}`;
     navigator.clipboard.writeText(cmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -120,13 +121,6 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
           </button>
           <div className="flex items-center space-x-2">
             <span className="text-[11px] font-mono text-slate-500">Last health check: {selectedServer.lastSeen || selectedServer.lastCheck}</span>
-            <button 
-              onClick={() => alert(`Demo action: test koneksi untuk ${selectedServer.name}. Backend SSH/API belum aktif.`)}
-              className="px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white font-mono text-xs uppercase border border-sky-400 flex items-center space-x-1.5 shadow-xs"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Test Connection</span>
-            </button>
           </div>
         </div>
 
@@ -158,7 +152,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
               </div>
               <div className="p-2.5 bg-sky-50/50 border border-sky-100">
                 <span className="text-[10px] text-slate-500 block">Uptime 30d</span>
-                <span className="font-bold text-slate-900">{selectedServer.uptime30d || '99.82%'}</span>
+                <span className="font-bold text-slate-900">{selectedServer.uptime30d || '-'}</span>
               </div>
             </div>
           </div>
@@ -225,7 +219,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div className="p-2.5 bg-white border border-sky-100">
                     <span className="text-[10px] text-slate-500 block uppercase">Backup</span>
-                    <span className="font-bold text-slate-900">{selectedServer.backupStatus || 'Success 02:00'}</span>
+                    <span className="font-bold text-slate-900">{selectedServer.backupStatus || 'Not configured'}</span>
                   </div>
                   <div className="p-2.5 bg-white border border-sky-100">
                     <span className="text-[10px] text-slate-500 block uppercase">SSL</span>
@@ -441,9 +435,15 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                   </div>
                 </div>
 
-                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 font-sans text-[11px]">
-                  Demo tahap ini belum membuka koneksi SSH/API sungguhan. Server baru akan masuk status <b>Waiting for Backend</b> sampai backend secure credential aktif.
+                <div className="p-3 bg-sky-50 border border-sky-200 text-sky-800 font-sans text-[11px]">
+                  Server akan disimpan ke database dengan status <b>waiting</b>. Credential SSH/Proxmox tidak disimpan di frontend.
                 </div>
+
+                {formError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 font-sans text-[11px]">
+                    {formError}
+                  </div>
+                )}
 
                 <div className="pt-2 flex justify-end space-x-3">
                   <button
@@ -455,9 +455,10 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                   </button>
                   <button
                     type="submit"
+                    disabled={formStatus === 'saving'}
                     className="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white uppercase font-bold border border-sky-400 shadow-xs"
                   >
-                    Add as Waiting for Backend
+                    {formStatus === 'saving' ? 'Saving...' : 'Add Server'}
                   </button>
                 </div>
               </form>
@@ -469,14 +470,14 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                     <span>Server "{createdServer.name}" ditambahkan sebagai Waiting for Backend.</span>
                   </p>
                   <p className="text-[11px] text-emerald-700">
-                    Connection Type: {connectionLabel(createdServer.connectionType as ConnectionType)}. Ini belum konek real sampai backend SSH/API dibuat.
+                    Connection Type: {connectionLabel(createdServer.connectionType as ConnectionType)}. Data tersimpan permanen di database.
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block font-bold text-slate-700">Preview command / probe:</label>
+                  <label className="block font-bold text-slate-700">Setup reference:</label>
                   <div className="bg-slate-900 text-emerald-400 p-3 rounded-none font-mono text-[11px] flex items-center justify-between overflow-x-auto">
-                    <code>{connectionType === 'ssh' ? `ssh ${sshUsername}@${serverIp} -p ${sshPort} "hostname && uptime && free -m && df -h"` : connectionType === 'proxmox' ? `curl -k https://${serverIp}:8006/api2/json/version` : `curl -fsSL https://its-syncera.vercel.app/api/agent/install.sh | bash -s -- ${createdServer.id} TOKEN_RAHASIA`}</code>
+                    <code>{connectionType === 'ssh' ? `SSH target saved: ${serverIp}:${sshPort}` : connectionType === 'proxmox' ? `Proxmox target saved: ${serverIp}` : `Agent target saved: ${createdServer.id}`}</code>
                     <button
                       onClick={() => copyAgentCommand(createdServer.id)}
                       className="ml-2 px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white uppercase text-[10px] flex items-center space-x-1 shrink-0"
@@ -541,9 +542,9 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                   <td className="p-4 text-[11px] text-slate-700">
                     CPU {srv.cpuUsage}% / RAM {srv.memoryUsage}% / Disk {srv.storageUsage}%
                   </td>
-                  <td className="p-4 text-slate-600">{srv.uptime30d || '99.82%'}</td>
-                  <td className="p-4 text-slate-600">{srv.backupStatus || 'Success 02:00'}</td>
-                  <td className="p-4 text-slate-600">{srv.sslStatus || 'Valid'}</td>
+                  <td className="p-4 text-slate-600">{srv.uptime30d || '-'}</td>
+                  <td className="p-4 text-slate-600">{srv.backupStatus || 'Not configured'}</td>
+                  <td className="p-4 text-slate-600">{srv.sslStatus || 'Not checked'}</td>
                   <td className="p-4 text-slate-500 text-[11px]">{srv.lastSeen || srv.lastCheck}</td>
                   <td className="p-4 text-right space-x-2 whitespace-nowrap">
                     <button
@@ -551,12 +552,6 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                       className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-mono uppercase text-[10px] border border-sky-400 font-bold shadow-xs"
                     >
                       View Detail
-                    </button>
-                    <button
-                      onClick={() => alert(`Demo action: request maintenance untuk ${srv.name}.`)}
-                      className="px-3 py-1.5 bg-white hover:bg-sky-50 text-sky-700 font-mono uppercase text-[10px] border border-sky-200 font-bold shadow-xs"
-                    >
-                      Request Maintenance
                     </button>
                   </td>
                 </tr>
