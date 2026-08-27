@@ -40,6 +40,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [servers, setServers] = useState<ServerItem[]>(initialServers);
 
+  React.useEffect(() => {
+    setServers(initialServers);
+  }, [initialServers]);
+
   const fetchServers = async () => {
     try {
       const res = await fetch('/api/servers');
