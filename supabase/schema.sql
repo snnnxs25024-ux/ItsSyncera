@@ -113,6 +113,57 @@ create table if not exists support_tickets (
   messages jsonb not null default '[]'::jsonb
 );
 
+create table if not exists billing_accounts (
+  id text primary key,
+  company_name text not null default '-',
+  plan_id text not null default '',
+  plan_name text not null default 'No active plan',
+  status text not null default 'not_configured' check (status in ('active', 'trial', 'past_due', 'cancelled', 'not_configured')),
+  billing_cycle text not null default 'manual' check (billing_cycle in ('monthly', 'yearly', 'manual')),
+  price text not null default '-',
+  currency text not null default 'IDR',
+  renewal_date text not null default '-',
+  server_limit integer,
+  payment_provider text not null default 'not configured',
+  payment_status text not null default 'not_configured' check (payment_status in ('configured', 'not_configured', 'failed')),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists billing_plans (
+  id text primary key,
+  name text not null,
+  price text not null default '-',
+  currency text not null default 'IDR',
+  billing_cycle text not null default 'manual' check (billing_cycle in ('monthly', 'yearly', 'manual')),
+  server_limit integer,
+  monitoring_interval text not null default '-',
+  support_level text not null default '-',
+  backup_retention text not null default '-',
+  features jsonb not null default '[]'::jsonb,
+  status text not null default 'active' check (status in ('active', 'archived'))
+);
+
+create table if not exists billing_invoices (
+  id text primary key,
+  invoice_number text not null unique,
+  date text not null default '-',
+  due_date text not null default '-',
+  amount text not null default '-',
+  currency text not null default 'IDR',
+  status text not null default 'unpaid' check (status in ('paid', 'unpaid', 'overdue', 'void'))
+);
+
+create table if not exists billing_plan_requests (
+  id text primary key,
+  current_plan text not null default '-',
+  requested_plan text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'cancelled')),
+  requested_at timestamptz not null default now(),
+  note text not null default '-'
+);
+
+create index if not exists billing_plan_requests_requested_idx on billing_plan_requests(requested_at desc);
+
 alter table servers enable row level security;
 alter table alerts enable row level security;
 alter table metric_snapshots enable row level security;
@@ -122,6 +173,10 @@ alter table automation_runs enable row level security;
 alter table maintenances enable row level security;
 alter table backups enable row level security;
 alter table support_tickets enable row level security;
+alter table billing_accounts enable row level security;
+alter table billing_plans enable row level security;
+alter table billing_invoices enable row level security;
+alter table billing_plan_requests enable row level security;
 
 do $$ begin
   create policy "public read servers" on servers for select using (true);
@@ -149,4 +204,16 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read support_tickets" on support_tickets for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read billing_accounts" on billing_accounts for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read billing_plans" on billing_plans for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read billing_invoices" on billing_invoices for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read billing_plan_requests" on billing_plan_requests for select using (true);
 exception when duplicate_object then null; end $$;

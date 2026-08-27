@@ -92,6 +92,55 @@ export interface AutomationRun {
   message: string;
 }
 
+export interface BillingAccount {
+  id: string;
+  companyName: string;
+  planId: string;
+  planName: string;
+  status: 'active' | 'trial' | 'past_due' | 'cancelled' | 'not_configured';
+  billingCycle: 'monthly' | 'yearly' | 'manual';
+  price: string;
+  currency: string;
+  renewalDate: string;
+  serverLimit: number | null;
+  paymentProvider: string;
+  paymentStatus: 'configured' | 'not_configured' | 'failed';
+  updatedAt: string;
+}
+
+export interface BillingPlan {
+  id: string;
+  name: string;
+  price: string;
+  currency: string;
+  billingCycle: 'monthly' | 'yearly' | 'manual';
+  serverLimit: number | null;
+  monitoringInterval: string;
+  supportLevel: string;
+  backupRetention: string;
+  features: string[];
+  status: 'active' | 'archived';
+}
+
+export interface BillingInvoice {
+  id: string;
+  invoiceNumber: string;
+  date: string;
+  dueDate: string;
+  amount: string;
+  currency: string;
+  status: 'paid' | 'unpaid' | 'overdue' | 'void';
+}
+
+export interface BillingPlanRequest {
+  id: string;
+  currentPlan: string;
+  requestedPlan: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  requestedAt: string;
+  note: string;
+}
+
 export interface MaintenanceItem {
   id: string;
   title: string;

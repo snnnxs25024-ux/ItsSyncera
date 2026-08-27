@@ -3,6 +3,10 @@ import {
   AutomationItem,
   AutomationRule,
   AutomationRun,
+  BillingAccount,
+  BillingInvoice,
+  BillingPlan,
+  BillingPlanRequest,
   BackupItem,
   MaintenanceItem,
   MetricSnapshot,
@@ -15,6 +19,10 @@ export interface DashboardData {
   automations: AutomationItem[];
   automationRules: AutomationRule[];
   automationRuns: AutomationRun[];
+  billingAccount: BillingAccount | null;
+  billingPlans: BillingPlan[];
+  billingInvoices: BillingInvoice[];
+  billingPlanRequests: BillingPlanRequest[];
   maintenances: MaintenanceItem[];
   backups: BackupItem[];
   tickets: SupportTicket[];
@@ -23,7 +31,7 @@ export interface DashboardData {
   error?: string;
 }
 
-type TableName = 'servers' | 'alerts' | 'automations' | 'automation_rules' | 'automation_runs' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots';
+type TableName = 'servers' | 'alerts' | 'automations' | 'automation_rules' | 'automation_runs' | 'billing_accounts' | 'billing_plans' | 'billing_invoices' | 'billing_plan_requests' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -34,6 +42,10 @@ const emptyData: DashboardData = {
   automations: [],
   automationRules: [],
   automationRuns: [],
+  billingAccount: null,
+  billingPlans: [],
+  billingInvoices: [],
+  billingPlanRequests: [],
   maintenances: [],
   backups: [],
   tickets: [],
@@ -64,7 +76,7 @@ const readOptionalTable = async <T>(table: TableName): Promise<T[]> => {
   try {
     return await readTable<T>(table);
   } catch (err) {
-    if (err instanceof Error && ['metric_snapshots', 'automation_rules', 'automation_runs'].some((tableName) => err.message.includes(tableName))) return [];
+    if (err instanceof Error && ['metric_snapshots', 'automation_rules', 'automation_runs', 'billing_accounts', 'billing_plans', 'billing_invoices', 'billing_plan_requests'].some((tableName) => err.message.includes(tableName))) return [];
     throw err;
   }
 };
@@ -146,6 +158,55 @@ const mapAutomationRun = (row: any): AutomationRun => ({
   message: row.message ?? '-',
 });
 
+const mapBillingAccount = (row: any): BillingAccount => ({
+  id: String(row.id),
+  companyName: row.company_name ?? row.companyName ?? '-',
+  planId: row.plan_id ?? row.planId ?? '',
+  planName: row.plan_name ?? row.planName ?? 'No active plan',
+  status: row.status ?? 'not_configured',
+  billingCycle: row.billing_cycle ?? row.billingCycle ?? 'manual',
+  price: row.price ?? '-',
+  currency: row.currency ?? 'IDR',
+  renewalDate: row.renewal_date ?? row.renewalDate ?? '-',
+  serverLimit: row.server_limit ?? row.serverLimit ?? null,
+  paymentProvider: row.payment_provider ?? row.paymentProvider ?? 'not configured',
+  paymentStatus: row.payment_status ?? row.paymentStatus ?? 'not_configured',
+  updatedAt: row.updated_at ?? row.updatedAt ?? '-',
+});
+
+const mapBillingPlan = (row: any): BillingPlan => ({
+  id: String(row.id),
+  name: row.name ?? 'Untitled plan',
+  price: row.price ?? '-',
+  currency: row.currency ?? 'IDR',
+  billingCycle: row.billing_cycle ?? row.billingCycle ?? 'manual',
+  serverLimit: row.server_limit ?? row.serverLimit ?? null,
+  monitoringInterval: row.monitoring_interval ?? row.monitoringInterval ?? '-',
+  supportLevel: row.support_level ?? row.supportLevel ?? '-',
+  backupRetention: row.backup_retention ?? row.backupRetention ?? '-',
+  features: Array.isArray(row.features) ? row.features : [],
+  status: row.status ?? 'active',
+});
+
+const mapBillingInvoice = (row: any): BillingInvoice => ({
+  id: String(row.id),
+  invoiceNumber: row.invoice_number ?? row.invoiceNumber ?? String(row.id),
+  date: row.date ?? '-',
+  dueDate: row.due_date ?? row.dueDate ?? '-',
+  amount: row.amount ?? '-',
+  currency: row.currency ?? 'IDR',
+  status: row.status ?? 'unpaid',
+});
+
+const mapBillingPlanRequest = (row: any): BillingPlanRequest => ({
+  id: String(row.id),
+  currentPlan: row.current_plan ?? row.currentPlan ?? '-',
+  requestedPlan: row.requested_plan ?? row.requestedPlan ?? '-',
+  status: row.status ?? 'pending',
+  requestedAt: row.requested_at ?? row.requestedAt ?? '-',
+  note: row.note ?? '-',
+});
+
 export const fetchDashboardData = async (): Promise<DashboardData> => {
   const api = await fetch('/api/dashboard').catch(() => null);
   if (api?.ok) return api.json();
@@ -155,12 +216,16 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   }
 
   try {
-    const [servers, alerts, automations, automationRules, automationRuns, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
+    const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
       readTable<any>('servers'),
       readTable<any>('alerts'),
       readTable<any>('automations'),
       readOptionalTable<any>('automation_rules'),
       readOptionalTable<any>('automation_runs'),
+      readOptionalTable<any>('billing_accounts'),
+      readOptionalTable<any>('billing_plans'),
+      readOptionalTable<any>('billing_invoices'),
+      readOptionalTable<any>('billing_plan_requests'),
       readTable<MaintenanceItem>('maintenances'),
       readTable<BackupItem>('backups'),
       readTable<SupportTicket>('support_tickets'),
@@ -173,6 +238,10 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
       automations: automations.map(mapAutomation),
       automationRules: automationRules.map(mapAutomationRule),
       automationRuns: automationRuns.map(mapAutomationRun),
+      billingAccount: billingAccounts[0] ? mapBillingAccount(billingAccounts[0]) : null,
+      billingPlans: billingPlans.map(mapBillingPlan),
+      billingInvoices: billingInvoices.map(mapBillingInvoice),
+      billingPlanRequests: billingPlanRequests.map(mapBillingPlanRequest),
       maintenances,
       backups,
       tickets,

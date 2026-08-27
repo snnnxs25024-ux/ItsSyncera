@@ -33,7 +33,7 @@ const readOptionalTable = async (table: string) => {
   try {
     return await readTable(table);
   } catch (err) {
-    if (err instanceof ApiError && (err.message.includes("Could not find the table") || ['metric_snapshots', 'automation_rules', 'automation_runs'].some((name) => err.message.includes(name)))) return [];
+    if (err instanceof ApiError && (err.message.includes("Could not find the table") || ['metric_snapshots', 'automation_rules', 'automation_runs', 'billing_accounts', 'billing_plans', 'billing_invoices', 'billing_plan_requests'].some((name) => err.message.includes(name)))) return [];
     throw err;
   }
 };
@@ -115,16 +115,69 @@ const mapAutomationRun = (row: Row) => ({
   message: row.message ?? '-',
 });
 
+const mapBillingAccount = (row: Row) => ({
+  id: String(row.id),
+  companyName: row.company_name ?? row.companyName ?? '-',
+  planId: row.plan_id ?? row.planId ?? '',
+  planName: row.plan_name ?? row.planName ?? 'No active plan',
+  status: row.status ?? 'not_configured',
+  billingCycle: row.billing_cycle ?? row.billingCycle ?? 'manual',
+  price: row.price ?? '-',
+  currency: row.currency ?? 'IDR',
+  renewalDate: row.renewal_date ?? row.renewalDate ?? '-',
+  serverLimit: row.server_limit ?? row.serverLimit ?? null,
+  paymentProvider: row.payment_provider ?? row.paymentProvider ?? 'not configured',
+  paymentStatus: row.payment_status ?? row.paymentStatus ?? 'not_configured',
+  updatedAt: row.updated_at ?? row.updatedAt ?? '-',
+});
+
+const mapBillingPlan = (row: Row) => ({
+  id: String(row.id),
+  name: row.name ?? 'Untitled plan',
+  price: row.price ?? '-',
+  currency: row.currency ?? 'IDR',
+  billingCycle: row.billing_cycle ?? row.billingCycle ?? 'manual',
+  serverLimit: row.server_limit ?? row.serverLimit ?? null,
+  monitoringInterval: row.monitoring_interval ?? row.monitoringInterval ?? '-',
+  supportLevel: row.support_level ?? row.supportLevel ?? '-',
+  backupRetention: row.backup_retention ?? row.backupRetention ?? '-',
+  features: Array.isArray(row.features) ? row.features : [],
+  status: row.status ?? 'active',
+});
+
+const mapBillingInvoice = (row: Row) => ({
+  id: String(row.id),
+  invoiceNumber: row.invoice_number ?? row.invoiceNumber ?? String(row.id),
+  date: row.date ?? '-',
+  dueDate: row.due_date ?? row.dueDate ?? '-',
+  amount: row.amount ?? '-',
+  currency: row.currency ?? 'IDR',
+  status: row.status ?? 'unpaid',
+});
+
+const mapBillingPlanRequest = (row: Row) => ({
+  id: String(row.id),
+  currentPlan: row.current_plan ?? row.currentPlan ?? '-',
+  requestedPlan: row.requested_plan ?? row.requestedPlan ?? '-',
+  status: row.status ?? 'pending',
+  requestedAt: row.requested_at ?? row.requestedAt ?? '-',
+  note: row.note ?? '-',
+});
+
 const sortByNewest = (a: Row, b: Row) => String(b.started_at ?? b.created_at ?? '').localeCompare(String(a.started_at ?? a.created_at ?? ''));
 
 export default async function handler(_req: any, res: any) {
   try {
-    const [servers, alerts, automations, automationRules, automationRuns, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
+    const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
       readTable('servers'),
       readTable('alerts'),
       readTable('automations'),
       readOptionalTable('automation_rules'),
       readOptionalTable('automation_runs'),
+      readOptionalTable('billing_accounts'),
+      readOptionalTable('billing_plans'),
+      readOptionalTable('billing_invoices'),
+      readOptionalTable('billing_plan_requests'),
       readTable('maintenances'),
       readTable('backups'),
       readTable('support_tickets'),
@@ -136,6 +189,10 @@ export default async function handler(_req: any, res: any) {
       automations: automations.map(mapAutomation),
       automationRules: automationRules.map(mapAutomationRule),
       automationRuns: automationRuns.sort(sortByNewest).slice(0, 50).map(mapAutomationRun),
+      billingAccount: billingAccounts[0] ? mapBillingAccount(billingAccounts[0]) : null,
+      billingPlans: billingPlans.map(mapBillingPlan),
+      billingInvoices: billingInvoices.map(mapBillingInvoice),
+      billingPlanRequests: billingPlanRequests.map(mapBillingPlanRequest),
       maintenances,
       backups,
       tickets,

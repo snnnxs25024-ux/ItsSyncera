@@ -3,7 +3,7 @@ import {
   Server, Activity, AlertTriangle, RefreshCw, ShieldCheck, 
   HardDrive, FileText, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Bell 
 } from 'lucide-react';
-import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
+import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, BillingAccount, BillingInvoice, BillingPlan, BillingPlanRequest, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
 import { OverviewView } from './views/OverviewView';
 import { ServersView } from './views/ServersView';
 import { MonitoringView } from './views/MonitoringView';
@@ -22,6 +22,10 @@ interface DashboardLayoutProps {
   automations: AutomationItem[];
   automationRules: AutomationRule[];
   automationRuns: AutomationRun[];
+  billingAccount: BillingAccount | null;
+  billingPlans: BillingPlan[];
+  billingInvoices: BillingInvoice[];
+  billingPlanRequests: BillingPlanRequest[];
   maintenances: MaintenanceItem[];
   backups: BackupItem[];
   tickets: SupportTicket[];
@@ -36,6 +40,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   automations,
   automationRules,
   automationRuns,
+  billingAccount,
+  billingPlans,
+  billingInvoices,
+  billingPlanRequests,
   maintenances,
   backups,
   tickets,
@@ -157,7 +165,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             <div className="flex items-center space-x-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <span className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900">
-                PRO Enterprise Fleet — Connected
+                {billingAccount?.planName || 'No Plan'} — {servers.length} Server
               </span>
             </div>
           </div>
@@ -182,8 +190,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 AS
               </div>
               <div className="hidden sm:block font-mono text-xs">
-                <span className="font-bold text-slate-900 block leading-none">PT Solusi Utama</span>
-                <span className="text-[10px] text-sky-600 uppercase">Enterprise Client</span>
+                <span className="font-bold text-slate-900 block leading-none">{billingAccount?.companyName || 'Client belum dikonfigurasi'}</span>
+                <span className="text-[10px] text-sky-600 uppercase">Billing Profile</span>
               </div>
             </div>
           </div>
@@ -247,7 +255,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           {currentTab === 'maintenance' && <MaintenanceView maintenances={maintenances} />}
           {currentTab === 'backup' && <BackupView backups={backups} />}
           {currentTab === 'reports' && <ReportsView servers={servers} alerts={alerts} automations={automations} automationRuns={automationRuns} maintenances={maintenances} backups={backups} />}
-          {currentTab === 'subscription' && <SubscriptionView />}
+          {currentTab === 'subscription' && <SubscriptionView billingAccount={billingAccount} billingPlans={billingPlans} billingInvoices={billingInvoices} billingPlanRequests={billingPlanRequests} servers={servers} automationRuns={automationRuns} backups={backups} tickets={tickets} />}
           {currentTab === 'support' && <SupportView tickets={tickets} />}
           {currentTab === 'settings' && <SettingsView />}
         </main>

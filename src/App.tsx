@@ -20,6 +20,10 @@ const initialDashboardData: DashboardData = {
   automations: [],
   automationRules: [],
   automationRuns: [],
+  billingAccount: null,
+  billingPlans: [],
+  billingInvoices: [],
+  billingPlanRequests: [],
   maintenances: [],
   backups: [],
   tickets: [],
@@ -74,6 +78,10 @@ export default function App() {
         automations={dashboardData.automations}
         automationRules={dashboardData.automationRules}
         automationRuns={dashboardData.automationRuns}
+        billingAccount={dashboardData.billingAccount}
+        billingPlans={dashboardData.billingPlans}
+        billingInvoices={dashboardData.billingInvoices}
+        billingPlanRequests={dashboardData.billingPlanRequests}
         maintenances={dashboardData.maintenances}
         backups={dashboardData.backups}
         tickets={dashboardData.tickets}
