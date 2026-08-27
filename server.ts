@@ -6,6 +6,7 @@ import handlerAgentInstall from './api/agent/install';
 import handlerAutomationRun from './api/automation/run';
 import handlerDashboard from './api/dashboard';
 import handlerServers from './api/servers';
+import handlerSettingsStatus from './api/settings/status';
 
 const runHandler = (handler: (req: any, res: any) => unknown) => (req: express.Request, res: express.Response) => handler(req, res);
 
@@ -23,6 +24,7 @@ async function startServer() {
   app.post("/api/agent/heartbeat", runHandler(handlerAgentHeartbeat));
   app.get("/api/servers", runHandler(handlerServers));
   app.post("/api/servers", runHandler(handlerServers));
+  app.get("/api/settings/status", runHandler(handlerSettingsStatus));
 
 
   // Vite middleware for development
