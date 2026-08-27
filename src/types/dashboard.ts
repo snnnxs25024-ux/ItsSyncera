@@ -37,6 +37,17 @@ export interface ServerItem {
   }[];
 }
 
+export interface MetricSnapshot {
+  id: string;
+  serverId: string;
+  serverName: string;
+  cpuUsage: number;
+  memoryUsage: number;
+  storageUsage: number;
+  networkTraffic: string;
+  createdAt: string;
+}
+
 export interface AlertItem {
   id: string;
   severity: 'critical' | 'warning' | 'information';

@@ -3,6 +3,7 @@ import {
   AutomationItem,
   BackupItem,
   MaintenanceItem,
+  MetricSnapshot,
   ServerItem,
   SupportTicket,
 } from '../types/dashboard';
@@ -13,11 +14,12 @@ export interface DashboardData {
   maintenances: MaintenanceItem[];
   backups: BackupItem[];
   tickets: SupportTicket[];
+  metricSnapshots: MetricSnapshot[];
   source: 'supabase' | 'mock';
   error?: string;
 }
 
-type TableName = 'servers' | 'alerts' | 'automations' | 'maintenances' | 'backups' | 'support_tickets';
+type TableName = 'servers' | 'alerts' | 'automations' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -29,6 +31,7 @@ const emptyData: DashboardData = {
   maintenances: [],
   backups: [],
   tickets: [],
+  metricSnapshots: [],
   source: 'supabase',
 };
 
@@ -49,6 +52,15 @@ const readTable = async <T>(table: TableName): Promise<T[]> => {
   }
 
   return res.json();
+};
+
+const readOptionalTable = async <T>(table: TableName): Promise<T[]> => {
+  try {
+    return await readTable<T>(table);
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('metric_snapshots')) return [];
+    throw err;
+  }
 };
 
 const mapServer = (row: any): ServerItem => ({
@@ -83,6 +95,17 @@ const mapAlert = (row: any): AlertItem => ({
   actionTaken: row.action_taken ?? row.actionTaken ?? '-',
 });
 
+const mapMetricSnapshot = (row: any): MetricSnapshot => ({
+  id: String(row.id),
+  serverId: row.server_id ?? row.serverId ?? '',
+  serverName: row.server_name ?? row.serverName ?? '',
+  cpuUsage: Number(row.cpu_usage ?? row.cpuUsage ?? 0),
+  memoryUsage: Number(row.memory_usage ?? row.memoryUsage ?? 0),
+  storageUsage: Number(row.storage_usage ?? row.storageUsage ?? 0),
+  networkTraffic: row.network_traffic ?? row.networkTraffic ?? '-',
+  createdAt: row.created_at ?? row.createdAt ?? '',
+});
+
 export const fetchDashboardData = async (): Promise<DashboardData> => {
   const api = await fetch('/api/dashboard').catch(() => null);
   if (api?.ok) return api.json();
@@ -92,13 +115,14 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   }
 
   try {
-    const [servers, alerts, automations, maintenances, backups, tickets] = await Promise.all([
+    const [servers, alerts, automations, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
       readTable<any>('servers'),
       readTable<any>('alerts'),
       readTable<AutomationItem>('automations'),
       readTable<MaintenanceItem>('maintenances'),
       readTable<BackupItem>('backups'),
       readTable<SupportTicket>('support_tickets'),
+      readOptionalTable<any>('metric_snapshots'),
     ]);
 
     return {
@@ -108,6 +132,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
       maintenances,
       backups,
       tickets,
+      metricSnapshots: metricSnapshots.map(mapMetricSnapshot),
       source: 'supabase',
     };
   } catch (err) {

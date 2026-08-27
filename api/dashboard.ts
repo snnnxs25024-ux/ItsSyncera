@@ -29,6 +29,15 @@ const readTable = async (table: string) => {
   return JSON.parse(body || '[]') as Row[];
 };
 
+const readOptionalTable = async (table: string) => {
+  try {
+    return await readTable(table);
+  } catch (err) {
+    if (err instanceof ApiError && err.message.includes("Could not find the table")) return [];
+    throw err;
+  }
+};
+
 const mapServer = (row: Row) => ({
   id: String(row.id),
   name: row.name ?? row.hostname ?? 'unnamed-server',
@@ -61,15 +70,27 @@ const mapAlert = (row: Row) => ({
   actionTaken: row.action_taken ?? row.actionTaken ?? '-',
 });
 
+const mapMetricSnapshot = (row: Row) => ({
+  id: String(row.id),
+  serverId: row.server_id ?? '',
+  serverName: row.server_name ?? '',
+  cpuUsage: Number(row.cpu_usage ?? 0),
+  memoryUsage: Number(row.memory_usage ?? 0),
+  storageUsage: Number(row.storage_usage ?? 0),
+  networkTraffic: row.network_traffic ?? '-',
+  createdAt: row.created_at ?? '',
+});
+
 export default async function handler(_req: any, res: any) {
   try {
-    const [servers, alerts, automations, maintenances, backups, tickets] = await Promise.all([
+    const [servers, alerts, automations, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
       readTable('servers'),
       readTable('alerts'),
       readTable('automations'),
       readTable('maintenances'),
       readTable('backups'),
       readTable('support_tickets'),
+      readOptionalTable('metric_snapshots'),
     ]);
     return res.status(200).json({
       servers: servers.map(mapServer),
@@ -78,6 +99,7 @@ export default async function handler(_req: any, res: any) {
       maintenances,
       backups,
       tickets,
+      metricSnapshots: metricSnapshots.map(mapMetricSnapshot),
       source: 'supabase',
     });
   } catch (err) {

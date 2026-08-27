@@ -32,6 +32,24 @@ const tokenFor = async (serverId: string) => {
 const number = (value: unknown, min = 0, max = 100) => Math.max(min, Math.min(max, Number(value) || 0));
 const serviceStatus = (value: unknown) => ['online', 'degraded', 'offline'].includes(String(value)) ? String(value) : 'offline';
 
+const insertSnapshot = async (serverId: string, serverName: string, cpu: number, mem: number, disk: number, networkTraffic: string) => {
+  const row = {
+    id: `snap-${serverId}-${Date.now().toString(36)}`,
+    server_id: serverId,
+    server_name: serverName,
+    cpu_usage: cpu,
+    memory_usage: mem,
+    storage_usage: disk,
+    network_traffic: networkTraffic,
+  };
+  const out = await fetch(`${baseUrl}/rest/v1/metric_snapshots`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify(row),
+  });
+  if (!out.ok && out.status !== 404) throw new ApiError(out.status, await out.text() || `snapshot failed: ${out.status}`);
+};
+
 const mapServer = (row: Row) => ({
   id: String(row.id),
   name: row.name ?? row.hostname ?? 'unnamed-server',
@@ -78,13 +96,14 @@ export default async function handler(req: any, res: any) {
       response: String(svc.response || '-').slice(0, 80),
     })) : [];
 
+    const networkTraffic = String(body.networkTraffic || body.network_traffic || '-').slice(0, 80);
     const patch = {
       status,
       os: String(body.os || 'Unknown OS').slice(0, 80),
       cpu_usage: cpu,
       memory_usage: mem,
       storage_usage: disk,
-      network_traffic: String(body.networkTraffic || body.network_traffic || '-').slice(0, 80),
+      network_traffic: networkTraffic,
       last_check: stamp,
       connection_type: 'agent',
       connection_status: 'Agent online',
@@ -103,6 +122,7 @@ export default async function handler(req: any, res: any) {
     if (!out.ok) throw new ApiError(out.status, text || `heartbeat failed: ${out.status}`);
     const rows = JSON.parse(text || '[]');
     if (!rows[0]) throw new ApiError(404, 'Server tidak ditemukan');
+    await insertSnapshot(serverId, rows[0].name || serverId, cpu, mem, disk, networkTraffic);
     return res.status(200).json({ success: true, server: mapServer(rows[0]) });
   } catch (err) {
     return res.status(err instanceof ApiError ? err.status : 500).json({ success: false, error: err instanceof Error ? err.message : 'heartbeat failed' });

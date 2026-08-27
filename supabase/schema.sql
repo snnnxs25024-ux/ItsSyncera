@@ -36,6 +36,19 @@ create table if not exists alerts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists metric_snapshots (
+  id text primary key,
+  server_id text not null references servers(id) on delete cascade,
+  server_name text not null,
+  cpu_usage numeric not null default 0,
+  memory_usage numeric not null default 0,
+  storage_usage numeric not null default 0,
+  network_traffic text not null default '-',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists metric_snapshots_server_time_idx on metric_snapshots(server_id, created_at desc);
+
 create table if not exists automations (
   id text primary key,
   name text not null,
@@ -76,6 +89,7 @@ create table if not exists support_tickets (
 
 alter table servers enable row level security;
 alter table alerts enable row level security;
+alter table metric_snapshots enable row level security;
 alter table automations enable row level security;
 alter table maintenances enable row level security;
 alter table backups enable row level security;
@@ -86,6 +100,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read alerts" on alerts for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read metric_snapshots" on metric_snapshots for select using (true);
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read automations" on automations for select using (true);

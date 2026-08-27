@@ -21,6 +21,7 @@ const initialDashboardData: DashboardData = {
   maintenances: [],
   backups: [],
   tickets: [],
+  metricSnapshots: [],
   source: 'supabase',
 };
 
@@ -72,6 +73,7 @@ export default function App() {
         maintenances={dashboardData.maintenances}
         backups={dashboardData.backups}
         tickets={dashboardData.tickets}
+        metricSnapshots={dashboardData.metricSnapshots}
         onRefreshData={loadDashboardData}
         onLogout={() => setIsLoggedIn(false)}
       />
