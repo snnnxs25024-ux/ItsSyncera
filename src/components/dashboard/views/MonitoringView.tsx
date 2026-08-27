@@ -8,8 +8,29 @@ interface MonitoringViewProps {
 }
 
 type Risk = 'Aman' | 'Warning' | 'Critical';
-type Range = 'realtime' | '1h' | '24h' | '7d' | '30d';
+type Range = '1m' | '5m' | '15m' | '1h' | '6h' | '24h';
 type Field = 'cpuUsage' | 'memoryUsage' | 'storageUsage';
+
+const RANGE_OPTIONS: { value: Range; label: string; minutes: number }[] = [
+  { value: '1m', label: '1m', minutes: 1 },
+  { value: '5m', label: '5m', minutes: 5 },
+  { value: '15m', label: '15m', minutes: 15 },
+  { value: '1h', label: '1h', minutes: 60 },
+  { value: '6h', label: '6h', minutes: 360 },
+  { value: '24h', label: '24h', minutes: 1440 },
+];
+
+const RESOURCE_LINES: { label: string; field: Field; color: string; soft: string }[] = [
+  { label: 'CPU', field: 'cpuUsage', color: '#38bdf8', soft: 'bg-sky-500/10 text-sky-700 border-sky-200' },
+  { label: 'RAM', field: 'memoryUsage', color: '#22c55e', soft: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
+  { label: 'Disk', field: 'storageUsage', color: '#f59e0b', soft: 'bg-amber-500/10 text-amber-700 border-amber-200' },
+];
+
+const CHART = {
+  width: 860,
+  height: 320,
+  pad: { left: 52, right: 104, top: 22, bottom: 46 },
+};
 
 const riskOf = (server: ServerItem): Risk => {
   if (server.status === 'critical' || server.cpuUsage >= 90 || server.memoryUsage >= 90 || server.storageUsage >= 90) return 'Critical';
@@ -41,17 +62,18 @@ const avgOf = (servers: ServerItem[], field: Field) => servers.length
   ? Math.round(servers.reduce((acc, s) => acc + s[field], 0) / servers.length)
   : 0;
 
+const rangeMinutes = (range: Range) => RANGE_OPTIONS.find((item) => item.value === range)?.minutes ?? 5;
+
 const inRange = (snapshot: MetricSnapshot, range: Range) => {
   const created = new Date(snapshot.createdAt).getTime();
-  if (!created) return false;
-  const hours = range === 'realtime' ? 1 : range === '1h' ? 1 : range === '24h' ? 24 : range === '7d' ? 168 : 720;
-  return created >= Date.now() - hours * 60 * 60 * 1000;
+  if (!Number.isFinite(created)) return false;
+  return created >= Date.now() - rangeMinutes(range) * 60 * 1000;
 };
 
 const timeLabel = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
 const shortTime = (value: string) => {
@@ -61,27 +83,42 @@ const shortTime = (value: string) => {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-const compact = (points: MetricSnapshot[], max = 96) => {
+const compact = (points: MetricSnapshot[], max = 120) => {
   if (points.length <= max) return points;
   const step = Math.ceil(points.length / max);
   return points.filter((_, i) => i % step === 0 || i === points.length - 1);
 };
 
+const percent = (value?: number) => {
+  const safe = Number(value ?? 0);
+  const rounded = Number.isFinite(safe) ? Math.round(safe * 10) / 10 : 0;
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}%`;
+};
+
 const trend = (points: MetricSnapshot[], field: Field) => {
-  const latest = points.at(-1)?.[field] ?? 0;
-  const prev = points.at(-2)?.[field] ?? latest;
-  const diff = latest - prev;
-  return `${diff > 0 ? '+' : ''}${diff}%`;
+  const latest = Number(points.at(-1)?.[field] ?? 0);
+  const prev = Number(points.at(-2)?.[field] ?? latest);
+  const diff = Math.round((latest - prev) * 10) / 10;
+  if (Math.abs(diff) < 0.1) return '0%';
+  return `${diff > 0 ? '+' : ''}${Number.isInteger(diff) ? diff : diff.toFixed(1)}%`;
+};
+
+const statsOf = (points: MetricSnapshot[], field: Field) => {
+  const values = points.map((point) => Number(point[field]) || 0);
+  const total = values.reduce((acc, value) => acc + value, 0);
+  return {
+    latest: values.at(-1) ?? 0,
+    min: Math.min(...values),
+    avg: values.length ? total / values.length : 0,
+    max: Math.max(...values),
+  };
 };
 
 const xy = (points: MetricSnapshot[], field: Field, index: number) => {
-  const width = 760;
-  const height = 280;
-  const pad = { left: 46, right: 18, top: 18, bottom: 34 };
-  const chartW = width - pad.left - pad.right;
-  const chartH = height - pad.top - pad.bottom;
-  const x = pad.left + (index / Math.max(points.length - 1, 1)) * chartW;
-  const y = pad.top + (1 - clamp(points[index][field], 0, 100) / 100) * chartH;
+  const chartW = CHART.width - CHART.pad.left - CHART.pad.right;
+  const chartH = CHART.height - CHART.pad.top - CHART.pad.bottom;
+  const x = CHART.pad.left + (index / Math.max(points.length - 1, 1)) * chartW;
+  const y = CHART.pad.top + (1 - clamp(Number(points[index]?.[field] ?? 0), 0, 100) / 100) * chartH;
   return { x, y };
 };
 
@@ -90,14 +127,11 @@ const pathFor = (points: MetricSnapshot[], field: Field) => points.map((_, i) =>
   return `${i === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
 }).join(' ');
 
-const LiveLineChart = ({ server, snapshots }: { server?: ServerItem; snapshots: MetricSnapshot[] }) => {
-  const points = compact(snapshots.slice(-120));
+const LiveLineChart = ({ server, snapshots, range }: { server?: ServerItem; snapshots: MetricSnapshot[]; range: Range }) => {
+  const points = compact(snapshots, range === '1m' ? 30 : range === '5m' ? 60 : 120);
   const latest = points.at(-1);
-  const lines: { label: string; field: Field; color: string; soft: string }[] = [
-    { label: 'CPU', field: 'cpuUsage', color: '#38bdf8', soft: 'bg-sky-500/10 text-sky-700 border-sky-200' },
-    { label: 'RAM', field: 'memoryUsage', color: '#22c55e', soft: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
-    { label: 'Disk', field: 'storageUsage', color: '#f59e0b', soft: 'bg-amber-500/10 text-amber-700 border-amber-200' },
-  ];
+  const rangeLabel = RANGE_OPTIONS.find((item) => item.value === range)?.label ?? range;
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   if (points.length < 2) {
     return (
@@ -107,14 +141,31 @@ const LiveLineChart = ({ server, snapshots }: { server?: ServerItem; snapshots: 
             <Activity className="w-4 h-4 text-sky-600" />
             <span>Live Resource Line Chart</span>
           </h2>
-          <span className="text-[10px] font-mono text-slate-500">{points.length} snapshot</span>
+          <span className="text-[10px] font-mono text-slate-500">{points.length} snapshot • {rangeLabel}</span>
         </div>
-        <div className="h-64 border border-dashed border-sky-200 bg-sky-50/30 flex items-center justify-center text-center p-4">
-          <p className="text-xs text-slate-500 font-sans">History belum cukup. Minimal 2 snapshot untuk line chart real.</p>
+        <div className="h-72 border border-dashed border-sky-200 bg-sky-50/30 flex items-center justify-center text-center p-4">
+          <div className="space-y-2">
+            <p className="text-xs text-slate-500 font-sans">History belum cukup untuk range {rangeLabel}. Minimal 2 snapshot real untuk line chart.</p>
+            {server ? <p className="text-[11px] font-mono text-slate-600">Current {server.name}: CPU {percent(server.cpuUsage)} • RAM {percent(server.memoryUsage)} • Disk {percent(server.storageUsage)}</p> : null}
+          </div>
         </div>
       </div>
     );
   }
+
+  const activeIndex = clamp(hoverIndex ?? points.length - 1, 0, points.length - 1);
+  const active = points[activeIndex];
+  const activeX = xy(points, 'cpuUsage', activeIndex).x;
+  const tooltipX = clamp(activeX + 12, 58, CHART.width - 182);
+  const dotStep = Math.max(1, Math.ceil(points.length / 18));
+
+  const handleMove = (event: React.MouseEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewX = ((event.clientX - rect.left) / rect.width) * CHART.width;
+    const chartW = CHART.width - CHART.pad.left - CHART.pad.right;
+    const ratio = clamp((viewX - CHART.pad.left) / chartW, 0, 1);
+    setHoverIndex(Math.round(ratio * (points.length - 1)));
+  };
 
   return (
     <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-5">
@@ -124,13 +175,13 @@ const LiveLineChart = ({ server, snapshots }: { server?: ServerItem; snapshots: 
             <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
             <span>Live Resource Line Chart</span>
           </h2>
-          <p className="text-[11px] text-slate-500 font-sans mt-1">Target: {server?.name || latest?.serverName || 'server'} • titik terbaru {timeLabel(latest?.createdAt || '')}</p>
+          <p className="text-[11px] text-slate-500 font-sans mt-1">Target: {server?.name || latest?.serverName || 'server'} • range {rangeLabel} • titik terbaru {timeLabel(latest?.createdAt || '')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {lines.map((line) => (
+          {RESOURCE_LINES.map((line) => (
             <div key={line.field} className={`px-3 py-2 border font-mono text-xs ${line.soft}`}>
               <span className="text-[10px] uppercase block">{line.label}</span>
-              <span className="font-bold text-base">{latest?.[line.field] ?? 0}%</span>
+              <span className="font-bold text-base">{percent(latest?.[line.field])}</span>
               <span className="text-[10px] ml-2">{trend(points, line.field)}</span>
             </div>
           ))}
@@ -138,44 +189,96 @@ const LiveLineChart = ({ server, snapshots }: { server?: ServerItem; snapshots: 
       </div>
 
       <div className="bg-slate-950 border border-slate-800 p-3 md:p-4 overflow-hidden">
-        <svg viewBox="0 0 760 280" className="w-full h-[280px]" role="img" aria-label="Live CPU RAM Disk line chart">
-          <rect x="0" y="0" width="760" height="280" fill="#020617" />
-          {[0, 25, 50, 75, 100].map((value) => {
-            const y = 18 + (1 - value / 100) * 228;
+        <svg
+          viewBox={`0 0 ${CHART.width} ${CHART.height}`}
+          className="w-full h-[320px] cursor-crosshair select-none"
+          role="img"
+          aria-label="Live CPU RAM Disk line chart dengan angka detail"
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHoverIndex(null)}
+        >
+          <rect x="0" y="0" width={CHART.width} height={CHART.height} fill="#020617" />
+          {[0, 25, 50, 75, 90, 100].map((value) => {
+            const y = CHART.pad.top + (1 - value / 100) * (CHART.height - CHART.pad.top - CHART.pad.bottom);
+            const guide = value === 75 || value === 90;
             return (
               <g key={value}>
-                <line x1="46" x2="742" y1={y} y2={y} stroke={value === 75 ? '#eab308' : value === 100 ? '#ef4444' : '#1e293b'} strokeWidth="1" strokeDasharray={value === 75 ? '6 6' : '0'} />
-                <text x="10" y={y + 4} fill="#94a3b8" fontSize="11" fontFamily="monospace">{value}%</text>
+                <line x1={CHART.pad.left} x2={CHART.width - CHART.pad.right} y1={y} y2={y} stroke={value === 90 ? '#ef4444' : value === 75 ? '#eab308' : '#1e293b'} strokeWidth={guide ? 1.5 : 1} strokeDasharray={guide ? '6 6' : '0'} />
+                <text x="12" y={y + 4} fill={guide ? '#e2e8f0' : '#94a3b8'} fontSize="11" fontFamily="monospace" fontWeight={guide ? 700 : 400}>{value}%</text>
               </g>
             );
           })}
           {points.map((_, i) => {
             if (i % Math.max(1, Math.floor(points.length / 8)) !== 0 && i !== points.length - 1) return null;
             const point = xy(points, 'cpuUsage', i);
-            return <line key={i} x1={point.x} x2={point.x} y1="18" y2="246" stroke="#0f172a" strokeWidth="1" />;
+            return <line key={i} x1={point.x} x2={point.x} y1={CHART.pad.top} y2={CHART.height - CHART.pad.bottom} stroke="#0f172a" strokeWidth="1" />;
           })}
-          {lines.map((line) => <path key={line.field} d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />)}
-          {lines.map((line) => {
-            const point = xy(points, line.field, points.length - 1);
+          {RESOURCE_LINES.map((line) => <path key={`${line.field}-glow`} d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />)}
+          {RESOURCE_LINES.map((line) => <path key={line.field} d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />)}
+          {RESOURCE_LINES.map((line) => points.map((point, i) => {
+            if (i % dotStep !== 0 && i !== activeIndex && i !== points.length - 1) return null;
+            const pos = xy(points, line.field, i);
+            const activeDot = i === activeIndex || i === points.length - 1;
             return (
-              <g key={line.field + '-dot'}>
-                <circle cx={point.x} cy={point.y} r="8" fill={line.color} opacity="0.16" className="animate-pulse" />
-                <circle cx={point.x} cy={point.y} r="4" fill={line.color} />
-                <text x={point.x - 12} y={point.y - 12} fill={line.color} fontSize="11" fontFamily="monospace" fontWeight="700">{latest?.[line.field]}%</text>
+              <circle key={`${line.field}-${point.id}-${i}`} cx={pos.x} cy={pos.y} r={activeDot ? 4.5 : 2.75} fill="#020617" stroke={line.color} strokeWidth={activeDot ? 2.5 : 1.5}>
+                <title>{`${line.label} ${percent(point[line.field])} • ${timeLabel(point.createdAt)}`}</title>
+              </circle>
+            );
+          }))}
+          <line x1={activeX} x2={activeX} y1={CHART.pad.top} y2={CHART.height - CHART.pad.bottom} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" opacity="0.7" />
+          {RESOURCE_LINES.map((line, index) => {
+            const point = xy(points, line.field, points.length - 1);
+            const labelX = CHART.width - CHART.pad.right + 14;
+            const labelY = CHART.pad.top + 20 + index * 32;
+            return (
+              <g key={`${line.field}-latest`}>
+                <line x1={point.x + 6} x2={labelX - 8} y1={point.y} y2={labelY} stroke={line.color} strokeWidth="1" strokeDasharray="3 3" opacity="0.65" />
+                <rect x={labelX} y={labelY - 14} width="84" height="26" fill="#020617" stroke={line.color} strokeWidth="1" />
+                <text x={labelX + 8} y={labelY + 4} fill={line.color} fontSize="12" fontFamily="monospace" fontWeight="700">{line.label} {percent(latest?.[line.field])}</text>
               </g>
             );
           })}
-          <text x="46" y="272" fill="#94a3b8" fontSize="11" fontFamily="monospace">{shortTime(points[0].createdAt)}</text>
-          <text x="360" y="272" fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="middle">warning 75% • critical 90%</text>
-          <text x="742" y="272" fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="end">{shortTime(latest?.createdAt || '')}</text>
+          <g transform={`translate(${tooltipX} ${CHART.pad.top + 104})`}>
+            <rect width="170" height="92" fill="#020617" stroke="#38bdf8" strokeWidth="1" opacity="0.96" />
+            <text x="10" y="18" fill="#e2e8f0" fontSize="10" fontFamily="monospace" fontWeight="700">{timeLabel(active.createdAt)}</text>
+            {RESOURCE_LINES.map((line, index) => (
+              <g key={`${line.field}-tip`} transform={`translate(10 ${36 + index * 17})`}>
+                <circle cx="0" cy="-4" r="3" fill={line.color} />
+                <text x="10" y="0" fill="#cbd5e1" fontSize="11" fontFamily="monospace">{line.label}</text>
+                <text x="96" y="0" fill={line.color} fontSize="11" fontFamily="monospace" fontWeight="700" textAnchor="end">{percent(active[line.field])}</text>
+              </g>
+            ))}
+          </g>
+          <text x={CHART.pad.left} y={CHART.height - 14} fill="#94a3b8" fontSize="11" fontFamily="monospace">{shortTime(points[0].createdAt)}</text>
+          <text x={(CHART.width - CHART.pad.right + CHART.pad.left) / 2} y={CHART.height - 14} fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="middle">warning 75% • critical 90% • hover untuk detail</text>
+          <text x={CHART.width - CHART.pad.right} y={CHART.height - 14} fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="end">{shortTime(latest?.createdAt || '')}</text>
         </svg>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {RESOURCE_LINES.map((line) => {
+          const stat = statsOf(points, line.field);
+          return (
+            <div key={`${line.field}-stat`} className="border border-sky-100 bg-sky-50/30 p-4 font-mono text-xs">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <span className="uppercase tracking-wider font-bold text-slate-700">{line.label} Detail</span>
+                <span style={{ color: line.color }} className="font-bold">Latest {percent(stat.latest)}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-600">
+                <span>Min <b className="text-slate-900">{percent(stat.min)}</b></span>
+                <span>Avg <b className="text-slate-900">{percent(stat.avg)}</b></span>
+                <span>Max <b className="text-slate-900">{percent(stat.max)}</b></span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 };
 
 export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricSnapshots }) => {
-  const [timeRange, setTimeRange] = useState<Range>('realtime');
+  const [timeRange, setTimeRange] = useState<Range>('5m');
   const services = servers.flatMap(srv => srv.services.map((svc) => ({ ...svc, serverName: srv.name, lastCheck: srv.lastCheck })));
   const onlineServices = services.filter(s => s.status === 'online').length;
   const degradedServices = services.filter(s => s.status === 'degraded').length;
@@ -185,11 +288,12 @@ export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricS
   const warningCount = servers.filter(s => s.status === 'warning').length;
   const criticalCount = servers.filter(s => s.status === 'critical').length;
   const waitingCount = servers.filter(s => s.status === 'waiting').length;
-  const chartServer = servers[0];
+  const chartServer = servers.find((server) => metricSnapshots.some((snapshot) => snapshot.serverId === server.id)) ?? servers[0];
   const filteredSnapshots = metricSnapshots
     .filter(s => inRange(s, timeRange))
     .filter(s => !chartServer || s.serverId === chartServer.id)
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const selectedRange = RANGE_OPTIONS.find((range) => range.value === timeRange);
 
   return (
     <div className="space-y-6">
@@ -197,18 +301,20 @@ export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricS
         <div>
           <span className="font-mono text-[10px] text-sky-600 uppercase tracking-widest font-semibold block mb-1">Monitoring Center</span>
           <h1 className="text-xl font-mono font-bold uppercase tracking-wide text-slate-900">Live Monitoring Chart</h1>
-          <p className="text-xs text-slate-500 font-sans mt-1">Grafik gabungan CPU/RAM/Disk. Snapshot real tiap 1 menit, UI cek data tiap 5 detik.</p>
+          <p className="text-xs text-slate-500 font-sans mt-1">Snapshot real dari metric_snapshots. UI refresh 5 detik. Range aktif {selectedRange?.label}.</p>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto max-w-full">
-          {(['realtime', '1h', '24h', '7d', '30d'] as const).map((range) => (
+          {RANGE_OPTIONS.map((range) => (
             <button
-              key={range}
-              onClick={() => setTimeRange(range)}
+              key={range.value}
+              type="button"
+              aria-pressed={timeRange === range.value}
+              onClick={() => setTimeRange(range.value)}
               className={`px-3 py-2 font-mono text-xs uppercase border transition-colors whitespace-nowrap ${
-                timeRange === range ? 'bg-sky-500 text-white border-sky-400 font-bold shadow-xs' : 'bg-white text-slate-700 border-sky-200 hover:bg-sky-50'
+                timeRange === range.value ? 'bg-sky-500 text-white border-sky-400 font-bold shadow-xs' : 'bg-white text-slate-700 border-sky-200 hover:bg-sky-50'
               }`}
             >
-              {range === 'realtime' ? 'Live' : range.toUpperCase()}
+              {range.label}
             </button>
           ))}
         </div>
@@ -236,10 +342,10 @@ export const MonitoringView: React.FC<MonitoringViewProps> = ({ servers, metricS
         <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Avg CPU</span><span className="text-3xl font-mono font-bold text-sky-600">{avgOf(servers, 'cpuUsage')}%</span></div>
         <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Avg RAM</span><span className="text-3xl font-mono font-bold text-emerald-600">{avgOf(servers, 'memoryUsage')}%</span></div>
         <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Avg Disk</span><span className="text-3xl font-mono font-bold text-amber-600">{avgOf(servers, 'storageUsage')}%</span></div>
-        <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Last Update</span><span className="text-sm font-mono font-bold text-slate-900">{latestUpdate}</span><p className="text-[11px] text-slate-500 font-sans mt-2">Live points: {filteredSnapshots.length}</p></div>
+        <div className="bg-white border border-sky-200 p-5 shadow-xs"><span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold block mb-2">Last Update</span><span className="text-sm font-mono font-bold text-slate-900">{latestUpdate}</span><p className="text-[11px] text-slate-500 font-sans mt-2">Range points: {filteredSnapshots.length}</p></div>
       </div>
 
-      <LiveLineChart server={chartServer} snapshots={filteredSnapshots} />
+      <LiveLineChart server={chartServer} snapshots={filteredSnapshots} range={timeRange} />
 
       <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
         <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2"><Database className="w-4 h-4 text-sky-600" /><span>Resource Usage Table</span></h2>
