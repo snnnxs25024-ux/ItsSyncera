@@ -9,7 +9,7 @@ interface ServersViewProps {
   onRefreshServers?: () => void;
 }
 
-type ConnectionType = 'ssh' | 'agent' | 'proxmox';
+type ConnectionType = 'agent' | 'website' | 'proxmox' | 'ssh';
 
 const statusClass = (status: ServerItem['status']) =>
   status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
@@ -19,9 +19,10 @@ const statusClass = (status: ServerItem['status']) =>
   'bg-rose-50 text-rose-700 border border-rose-200';
 
 const connectionLabel = (type?: ConnectionType) =>
-  type === 'ssh' ? 'Quick Connect via SSH' :
-  type === 'proxmox' ? 'Connect Proxmox' :
-  'Install Syncera Agent';
+  type === 'website' ? 'Website / SSL Monitor' :
+  type === 'proxmox' ? 'Register Proxmox API' :
+  type === 'ssh' ? 'SSH Key Connector' :
+  'Linux/VPS Agent';
 
 export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServer, onSelectServer, onRefreshServers }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -31,7 +32,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   
   // Add Server modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [connectionType, setConnectionType] = useState<ConnectionType>('ssh');
+  const [connectionType, setConnectionType] = useState<ConnectionType>('agent');
   const [serverName, setServerName] = useState('');
   const [serverIp, setServerIp] = useState('');
   const [sshPort, setSshPort] = useState('22');
@@ -39,7 +40,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const [serverOs, setServerOs] = useState('Ubuntu 24.04 LTS');
   const [serverProvider, setServerProvider] = useState('VPS / Dedicated Server');
   const [serverLocation, setServerLocation] = useState('Jakarta DC');
-  const [createdServer, setCreatedServer] = useState<ServerItem | null>(null);
+  const [createdServer, setCreatedServer] = useState<(ServerItem & { installCommand?: string }) | null>(null);
   const [copied, setCopied] = useState(false);
 
   const allServers = servers;
@@ -52,6 +53,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const resetAddForm = () => {
     setServerName('');
     setServerIp('');
+    setConnectionType('agent');
     setSshPort('22');
     setSshUsername('root');
     setServerOs('Ubuntu 24.04 LTS');
@@ -82,6 +84,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
           provider: serverProvider,
           location: serverLocation,
           connectionType,
+          connectorKind: connectionType,
           sshPort: connectionType === 'ssh' ? sshPort : undefined,
         }),
       });
@@ -96,12 +99,15 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
     }
   };
 
+  const setupReference = (serverId: string) => {
+    if (connectionType === 'agent' && createdServer?.installCommand) return createdServer.installCommand;
+    if (connectionType === 'website') return `Website monitor active: ${serverIp}`;
+    if (connectionType === 'proxmox') return `Next: add Proxmox API token for ${serverIp}`;
+    return `Next: add SSH key for ${serverIp}:${sshPort}`;
+  };
+
   const copyAgentCommand = (serverId: string) => {
-    const cmd = connectionType === 'ssh'
-      ? `SSH target saved: ${serverIp}:${sshPort}`
-      : connectionType === 'proxmox'
-        ? `Proxmox target saved: ${serverIp}`
-        : `Agent target saved: ${serverId}`;
+    const cmd = setupReference(serverId);
     navigator.clipboard.writeText(cmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -223,7 +229,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                   </div>
                   <div className="p-2.5 bg-white border border-sky-100">
                     <span className="text-[10px] text-slate-500 block uppercase">SSL</span>
-                    <span className="font-bold text-slate-900">{selectedServer.sslStatus || 'Valid'}</span>
+                    <span className="font-bold text-slate-900">{selectedServer.sslStatus || 'Not checked'}</span>
                   </div>
                 </div>
               </div>
@@ -338,11 +344,12 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
               <form onSubmit={handleAddServerSubmit} className="space-y-5 font-mono text-xs">
                 <div>
                   <label className="block text-slate-600 mb-2 font-bold uppercase">Connection Type</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     {[
-                      { id: 'ssh' as ConnectionType, label: 'Quick Connect via SSH', desc: 'Instan test lewat IP, port, username, password/key.', icon: KeyRound },
-                      { id: 'agent' as ConnectionType, label: 'Install Syncera Agent', desc: 'Lebih aman untuk production. Server kirim data keluar.', icon: Terminal },
-                      { id: 'proxmox' as ConnectionType, label: 'Connect Proxmox', desc: 'Untuk node/cluster Proxmox API.', icon: Cloud }
+                      { id: 'agent' as ConnectionType, label: 'Linux/VPS Agent', desc: 'Data lengkap: CPU, RAM, disk, uptime. Client jalankan 1 command.', icon: Terminal },
+                      { id: 'website' as ConnectionType, label: 'Website Monitor', desc: 'Langsung cek up/down, latency, HTTPS. Tanpa akses server.', icon: Wifi },
+                      { id: 'proxmox' as ConnectionType, label: 'Proxmox API', desc: 'Register endpoint dulu. Token connector aman tahap berikutnya.', icon: Cloud },
+                      { id: 'ssh' as ConnectionType, label: 'SSH Key', desc: 'Register endpoint dulu. Key vault aman tahap berikutnya.', icon: KeyRound }
                     ].map((item) => {
                       const Icon = item.icon;
                       return (
@@ -378,7 +385,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                     <input
                       type="text"
                       required
-                      placeholder={connectionType === 'proxmox' ? 'proxmox.example.com' : '123.123.123.123'}
+                      placeholder={connectionType === 'website' ? 'https://example.com' : connectionType === 'proxmox' ? 'proxmox.example.com' : '123.123.123.123'}
                       value={serverIp}
                       onChange={(e) => setServerIp(e.target.value)}
                       className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
@@ -436,7 +443,11 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                 </div>
 
                 <div className="p-3 bg-sky-50 border border-sky-200 text-sky-800 font-sans text-[11px]">
-                  Server akan disimpan ke database dengan status <b>waiting</b>. Credential SSH/Proxmox tidak disimpan di frontend.
+                  {connectionType === 'website'
+                    ? 'Website Monitor langsung cek HTTP/HTTPS setelah disimpan.'
+                    : connectionType === 'agent'
+                      ? 'Setelah tersimpan, jalankan install command sekali di server. Data CPU/RAM/disk akan masuk otomatis tiap 1 menit.'
+                      : 'Target disimpan dulu. Credential aman untuk Proxmox/SSH dibuat di tahap berikutnya, tidak disimpan di frontend.'}
                 </div>
 
                 {formError && (
@@ -467,17 +478,17 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                 <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
                   <p className="font-bold flex items-center space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Server "{createdServer.name}" ditambahkan sebagai Waiting for Backend.</span>
+                    <span>Connection "{createdServer.name}" berhasil dibuat.</span>
                   </p>
                   <p className="text-[11px] text-emerald-700">
-                    Connection Type: {connectionLabel(createdServer.connectionType as ConnectionType)}. Data tersimpan permanen di database.
+                    Connection Type: {connectionLabel(createdServer.connectionType as ConnectionType)}. {connectionType === 'website' ? 'Probe awal sudah dijalankan.' : connectionType === 'agent' ? 'Jalankan command di bawah untuk mulai telemetry real.' : 'Data tersimpan permanen di database.'}
                   </p>
                 </div>
 
                 <div className="space-y-2">
                   <label className="block font-bold text-slate-700">Setup reference:</label>
                   <div className="bg-slate-900 text-emerald-400 p-3 rounded-none font-mono text-[11px] flex items-center justify-between overflow-x-auto">
-                    <code>{connectionType === 'ssh' ? `SSH target saved: ${serverIp}:${sshPort}` : connectionType === 'proxmox' ? `Proxmox target saved: ${serverIp}` : `Agent target saved: ${createdServer.id}`}</code>
+                    <code>{setupReference(createdServer.id)}</code>
                     <button
                       onClick={() => copyAgentCommand(createdServer.id)}
                       className="ml-2 px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white uppercase text-[10px] flex items-center space-x-1 shrink-0"

@@ -24,7 +24,7 @@ export interface ServerItem {
   storageUsage: number;
   networkTraffic: string;
   lastCheck: string;
-  connectionType?: 'ssh' | 'agent' | 'proxmox';
+  connectionType?: 'ssh' | 'agent' | 'proxmox' | 'website';
   connectionStatus?: string;
   uptime30d?: string;
   backupStatus?: string;

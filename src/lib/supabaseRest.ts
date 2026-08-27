@@ -64,7 +64,7 @@ const mapServer = (row: any): ServerItem => ({
   storageUsage: Number(row.storage_usage ?? row.storageUsage ?? 0),
   networkTraffic: row.network_traffic ?? row.networkTraffic ?? '-',
   lastCheck: row.last_check ?? row.lastCheck ?? 'Never',
-  connectionType: row.connection_type ?? row.connectionType ?? 'ssh',
+  connectionType: String(row.connection_status ?? '').startsWith('Website Monitor:') || row.provider === 'Website Monitor' ? 'website' : row.connection_type ?? row.connectionType ?? 'ssh',
   connectionStatus: row.connection_status ?? row.connectionStatus ?? 'Waiting for Backend',
   uptime30d: row.uptime_30d ?? row.uptime30d ?? '-',
   backupStatus: row.backup_status ?? row.backupStatus ?? 'Not configured',

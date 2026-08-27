@@ -1,5 +1,8 @@
+import { createHmac } from 'node:crypto';
+
 type Row = Record<string, any>;
-type ConnectionType = 'ssh' | 'agent' | 'proxmox';
+type PublicConnectionType = 'ssh' | 'agent' | 'proxmox' | 'website';
+type StoredConnectionType = 'ssh' | 'agent' | 'proxmox';
 
 class ApiError extends Error {
   status: number;
@@ -13,6 +16,10 @@ const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'h
   .replace(/\/$/, '')
   .replace(/\/rest\/v1$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+const now = () => new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour12: false });
+const clean = (value: unknown, max = 120) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'server';
 
 const headers = (extra: Record<string, string> = {}) => {
   if (!supabaseKey) throw new ApiError(500, 'SUPABASE key missing');
@@ -31,6 +38,11 @@ const readTable = async (table: string) => {
   return JSON.parse(body || '[]') as Row[];
 };
 
+const mapConnectionType = (row: Row): PublicConnectionType => {
+  if (String(row.connection_status ?? '').startsWith('Website Monitor:') || row.provider === 'Website Monitor') return 'website';
+  return (row.connection_type ?? row.connectionType ?? 'ssh') as PublicConnectionType;
+};
+
 const mapServer = (row: Row) => ({
   id: String(row.id),
   name: row.name ?? row.hostname ?? 'unnamed-server',
@@ -44,7 +56,7 @@ const mapServer = (row: Row) => ({
   storageUsage: Number(row.storage_usage ?? row.storageUsage ?? 0),
   networkTraffic: row.network_traffic ?? row.networkTraffic ?? '-',
   lastCheck: row.last_check ?? row.lastCheck ?? 'Never',
-  connectionType: row.connection_type ?? row.connectionType ?? 'ssh',
+  connectionType: mapConnectionType(row),
   connectionStatus: row.connection_status ?? row.connectionStatus ?? 'Waiting for Backend',
   uptime30d: row.uptime_30d ?? row.uptime30d ?? '-',
   backupStatus: row.backup_status ?? row.backupStatus ?? 'Not configured',
@@ -52,9 +64,6 @@ const mapServer = (row: Row) => ({
   lastSeen: row.last_seen ?? row.lastSeen ?? row.last_check ?? 'Never',
   services: Array.isArray(row.services) ? row.services : [],
 });
-
-const clean = (value: unknown, max = 120) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
-const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'server';
 
 const normalizeHost = (value: string) => {
   const raw = value.trim();
@@ -66,50 +75,119 @@ const normalizeHost = (value: string) => {
   return raw;
 };
 
-const connectionStatus = (type: ConnectionType, host: string, port?: string) => {
-  if (type === 'ssh') return `Waiting for Backend: SSH ${host}${port ? `:${port}` : ''}`;
-  if (type === 'proxmox') return `Waiting for Backend: Proxmox API ${host}`;
-  return 'Waiting for Agent: install belum dijalankan';
+const normalizeWebsite = (value: string) => {
+  const raw = value.trim();
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(withScheme);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) throw new Error('bad url');
+    return url.href.replace(/\/$/, '');
+  } catch {
+    throw new ApiError(400, 'URL website tidak valid');
+  }
 };
 
-const createServerRecord = async (input: Row) => {
+const connectionStatus = (type: StoredConnectionType, host: string, port?: string) => {
+  if (type === 'ssh') return `Waiting for SSH key connector: ${host}${port ? `:${port}` : ''}`;
+  if (type === 'proxmox') return `Waiting for Proxmox API token: ${host}`;
+  return 'Waiting for Agent heartbeat';
+};
+
+const agentToken = (serverId: string) => {
+  if (!supabaseKey) throw new ApiError(500, 'SUPABASE key missing');
+  return createHmac('sha256', supabaseKey).update(serverId).digest('hex').slice(0, 48);
+};
+
+const appOrigin = (req: any) => {
+  const host = req.headers?.host;
+  const proto = String(req.headers?.['x-forwarded-proto'] || (host?.startsWith('localhost') || host?.startsWith('127.') ? 'http' : 'https')).split(',')[0];
+  if (host) return `${proto}://${host}`;
+  if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL.replace(/\/$/, '');
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'https://its-syncera.vercel.app';
+};
+
+const installCommand = (req: any, serverId: string) => `curl -fsSL ${appOrigin(req)}/api/agent/install | sudo bash -s -- ${serverId} ${agentToken(serverId)}`;
+
+const probeWebsite = async (url: string) => {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal });
+    const ms = Date.now() - started;
+    res.body?.cancel().catch(() => undefined);
+    const ok = res.status < 400;
+    return {
+      status: ok ? 'active' : 'critical',
+      networkTraffic: `${ms}ms`,
+      connectionStatus: `Website Monitor: HTTP ${res.status} in ${ms}ms`,
+      sslStatus: new URL(res.url || url).protocol === 'https:' ? 'HTTPS OK' : 'No HTTPS',
+      lastSeen: now(),
+      services: [{ name: 'HTTP', status: ok ? 'online' : 'offline', response: `${res.status} ${ms}ms` }],
+    };
+  } catch (err) {
+    const ms = Date.now() - started;
+    return {
+      status: 'critical',
+      networkTraffic: `${ms}ms`,
+      connectionStatus: `Website Monitor: ${err instanceof Error ? err.message : 'request failed'}`,
+      sslStatus: url.startsWith('https://') ? 'HTTPS check failed' : 'Not checked',
+      lastSeen: now(),
+      services: [{ name: 'HTTP', status: 'offline', response: `failed ${ms}ms` }],
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const createServerRecord = async (input: Row, req: any) => {
   const name = clean(input.name, 80);
-  const ipAddress = normalizeHost(clean(input.ipAddress ?? input.ip_address, 160));
-  const connectionType = clean(input.connectionType ?? input.connection_type, 20) as ConnectionType;
+  const requestedType = clean(input.connectorKind ?? input.connectionType ?? input.connection_type, 20) as PublicConnectionType;
+  const connectorKind: PublicConnectionType = requestedType || 'agent';
+  const storedType: StoredConnectionType = connectorKind === 'website' ? 'agent' : connectorKind as StoredConnectionType;
   const sshPort = clean(input.sshPort, 8);
 
   if (name.length < 2) throw new ApiError(400, 'Nama server minimal 2 karakter');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9 ._-]{1,79}$/.test(name)) throw new ApiError(400, 'Nama server hanya boleh huruf, angka, spasi, titik, dash, underscore');
-  if (!/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(ipAddress)) throw new ApiError(400, 'IP/domain tidak valid');
-  if (!['ssh', 'agent', 'proxmox'].includes(connectionType)) throw new ApiError(400, 'Connection type tidak valid');
-  if (connectionType === 'ssh' && sshPort && (!/^\d{1,5}$/.test(sshPort) || Number(sshPort) < 1 || Number(sshPort) > 65535)) {
+  if (!['ssh', 'agent', 'proxmox', 'website'].includes(connectorKind)) throw new ApiError(400, 'Connection type tidak valid');
+  if (connectorKind === 'ssh' && sshPort && (!/^\d{1,5}$/.test(sshPort) || Number(sshPort) < 1 || Number(sshPort) > 65535)) {
     throw new ApiError(400, 'SSH port tidak valid');
   }
+
+  const ipAddress = connectorKind === 'website'
+    ? normalizeWebsite(clean(input.ipAddress ?? input.ip_address, 220))
+    : normalizeHost(clean(input.ipAddress ?? input.ip_address, 160));
+  if (connectorKind !== 'website' && !/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(ipAddress)) throw new ApiError(400, 'IP/domain tidak valid');
 
   // ponytail: list-scan OK sampai ratusan server; upgrade ke unique index + filtered query saat multi-tenant.
   const duplicate = (await readTable('servers')).find((row) => String(row.name ?? '').toLowerCase() === name.toLowerCase() || String(row.ip_address ?? '').toLowerCase() === ipAddress.toLowerCase());
   if (duplicate) throw new ApiError(409, `Server sudah ada: ${duplicate.name}`);
 
+  const id = `srv-${slug(name)}-${Date.now().toString(36)}`;
+  const probe = connectorKind === 'website' ? await probeWebsite(ipAddress) : null;
+  const stamp = now();
   const row = {
-    id: `srv-${slug(name)}-${Date.now().toString(36)}`,
+    id,
     name,
-    status: 'waiting',
-    os: clean(input.os, 80) || 'Unknown OS',
+    status: probe?.status ?? 'waiting',
+    os: connectorKind === 'website' ? 'HTTP endpoint' : clean(input.os, 80) || 'Unknown OS',
     ip_address: ipAddress,
-    provider: clean(input.provider, 80) || 'Unknown Provider',
-    location: clean(input.location, 80) || 'Unknown Location',
+    provider: connectorKind === 'website' ? 'Website Monitor' : clean(input.provider, 80) || 'Unknown Provider',
+    location: connectorKind === 'website' ? 'Public Internet' : clean(input.location, 80) || 'Unknown Location',
     cpu_usage: 0,
     memory_usage: 0,
     storage_usage: 0,
-    network_traffic: '-',
-    last_check: 'Never',
-    connection_type: connectionType,
-    connection_status: connectionStatus(connectionType, ipAddress, sshPort),
+    network_traffic: probe?.networkTraffic ?? '-',
+    last_check: probe?.lastSeen ?? 'Never',
+    connection_type: storedType,
+    connection_status: probe?.connectionStatus ?? connectionStatus(storedType, ipAddress, sshPort),
     uptime_30d: '-',
     backup_status: 'Not configured',
-    ssl_status: 'Not checked',
-    last_seen: 'Never',
-    services: [],
+    ssl_status: probe?.sslStatus ?? 'Not checked',
+    last_seen: probe?.lastSeen ?? 'Never',
+    services: probe?.services ?? [],
+    updated_at: new Date().toISOString(),
   };
 
   const res = await fetch(`${baseUrl}/rest/v1/servers`, {
@@ -119,7 +197,10 @@ const createServerRecord = async (input: Row) => {
   });
   const body = await res.text();
   if (!res.ok) throw new ApiError(res.status, body || `insert failed: ${res.status}`);
-  return mapServer(JSON.parse(body)[0]);
+  const server = mapServer(JSON.parse(body)[0]);
+  return connectorKind === 'agent'
+    ? { server: { ...server, installCommand: installCommand(req, server.id) }, agentToken: agentToken(server.id), installCommand: installCommand(req, server.id) }
+    : { server };
 };
 
 const bodyOf = (req: any) => {
@@ -131,7 +212,10 @@ const bodyOf = (req: any) => {
 export default async function handler(req: any, res: any) {
   try {
     if (req.method === 'GET') return res.status(200).json({ success: true, servers: (await readTable('servers')).map(mapServer) });
-    if (req.method === 'POST') return res.status(201).json({ success: true, server: await createServerRecord(bodyOf(req)) });
+    if (req.method === 'POST') {
+      const out = await createServerRecord(bodyOf(req), req);
+      return res.status(201).json({ success: true, ...out });
+    }
     res.setHeader('Allow', 'GET, POST');
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   } catch (err) {
