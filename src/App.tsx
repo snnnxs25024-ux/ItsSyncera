@@ -37,6 +37,10 @@ export default function App() {
   useEffect(() => {
     if (!isLoggedIn) return;
     fetchDashboardData().then(setDashboardData);
+    const interval = window.setInterval(() => {
+      fetchDashboardData().then(setDashboardData);
+    }, 15000);
+    return () => window.clearInterval(interval);
   }, [isLoggedIn]);
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
