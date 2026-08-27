@@ -20,16 +20,16 @@ const RANGE_OPTIONS: { value: Range; label: string; minutes: number }[] = [
   { value: '24h', label: '24h', minutes: 1440 },
 ];
 
-const RESOURCE_LINES: { label: string; field: Field; color: string; soft: string }[] = [
-  { label: 'CPU', field: 'cpuUsage', color: '#38bdf8', soft: 'bg-sky-500/10 text-sky-700 border-sky-200' },
-  { label: 'RAM', field: 'memoryUsage', color: '#22c55e', soft: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
-  { label: 'Disk', field: 'storageUsage', color: '#f59e0b', soft: 'bg-amber-500/10 text-amber-700 border-amber-200' },
+const RESOURCE_LINES: { label: string; field: Field; color: string; soft: string; bg: string }[] = [
+  { label: 'CPU', field: 'cpuUsage', color: '#0284c7', soft: 'bg-sky-500/10 text-sky-700 border-sky-200', bg: '#f0f9ff' },
+  { label: 'RAM', field: 'memoryUsage', color: '#16a34a', soft: 'bg-emerald-500/10 text-emerald-700 border-emerald-200', bg: '#f0fdf4' },
+  { label: 'Disk', field: 'storageUsage', color: '#d97706', soft: 'bg-amber-500/10 text-amber-700 border-amber-200', bg: '#fffbeb' },
 ];
 
 const CHART = {
   width: 860,
-  height: 320,
-  pad: { left: 52, right: 104, top: 22, bottom: 46 },
+  height: 170,
+  pad: { left: 52, right: 90, top: 18, bottom: 34 },
 };
 
 const riskOf = (server: ServerItem): Risk => {
@@ -127,6 +127,101 @@ const pathFor = (points: MetricSnapshot[], field: Field) => points.map((_, i) =>
   return `${i === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
 }).join(' ');
 
+const MiniLineChart = ({ points, line, activeIndex, onHover, onLeave }: {
+  points: MetricSnapshot[];
+  line: (typeof RESOURCE_LINES)[number];
+  activeIndex: number;
+  onHover: (index: number) => void;
+  onLeave: () => void;
+}) => {
+  const active = points[activeIndex];
+  const latest = points.at(-1);
+  const latestPoint = xy(points, line.field, points.length - 1);
+  const activePoint = xy(points, line.field, activeIndex);
+  const stat = statsOf(points, line.field);
+  const chartRight = CHART.width - CHART.pad.right;
+
+  const handleMove = (event: React.MouseEvent<SVGSVGElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewX = ((event.clientX - rect.left) / rect.width) * CHART.width;
+    const chartW = CHART.width - CHART.pad.left - CHART.pad.right;
+    const ratio = clamp((viewX - CHART.pad.left) / chartW, 0, 1);
+    onHover(Math.round(ratio * (points.length - 1)));
+  };
+
+  return (
+    <div className="border border-sky-100 bg-white p-4 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
+        <div className="font-mono">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5" style={{ backgroundColor: line.color }} />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-900">{line.label}</span>
+            <span className="text-[10px] text-slate-500 uppercase">{trend(points, line.field)}</span>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1">Latest {percent(latest?.[line.field])} • {timeLabel(latest?.createdAt || '')}</p>
+        </div>
+        <div className="grid grid-cols-4 gap-2 font-mono text-[10px] text-slate-500 sm:text-right">
+          <span>Now <b className="block text-slate-900 text-xs">{percent(stat.latest)}</b></span>
+          <span>Min <b className="block text-slate-900 text-xs">{percent(stat.min)}</b></span>
+          <span>Avg <b className="block text-slate-900 text-xs">{percent(stat.avg)}</b></span>
+          <span>Max <b className="block text-slate-900 text-xs">{percent(stat.max)}</b></span>
+        </div>
+      </div>
+
+      <svg
+        viewBox={`0 0 ${CHART.width} ${CHART.height}`}
+        className="w-full h-[170px] cursor-crosshair select-none"
+        role="img"
+        aria-label={`${line.label} live line chart`}
+        onMouseMove={handleMove}
+        onMouseLeave={onLeave}
+      >
+        <rect x="0" y="0" width={CHART.width} height={CHART.height} fill={line.bg} />
+        <rect x={CHART.pad.left} y={CHART.pad.top} width={chartRight - CHART.pad.left} height={CHART.height - CHART.pad.top - CHART.pad.bottom} fill="#ffffff" stroke="#e0f2fe" strokeWidth="1" />
+        {[0, 25, 50, 75, 90, 100].map((value) => {
+          const y = CHART.pad.top + (1 - value / 100) * (CHART.height - CHART.pad.top - CHART.pad.bottom);
+          const guide = value === 75 || value === 90;
+          return (
+            <g key={value}>
+              <line x1={CHART.pad.left} x2={chartRight} y1={y} y2={y} stroke={value === 90 ? '#fca5a5' : value === 75 ? '#fcd34d' : '#dbeafe'} strokeWidth={guide ? 1.3 : 1} strokeDasharray={guide ? '6 6' : '0'} />
+              <text x="14" y={y + 4} fill={guide ? '#475569' : '#94a3b8'} fontSize="11" fontFamily="monospace" fontWeight={guide ? 700 : 400}>{value}%</text>
+            </g>
+          );
+        })}
+        {points.map((_, i) => {
+          if (i % Math.max(1, Math.floor(points.length / 6)) !== 0 && i !== points.length - 1) return null;
+          const point = xy(points, line.field, i);
+          return <line key={i} x1={point.x} x2={point.x} y1={CHART.pad.top} y2={CHART.height - CHART.pad.bottom} stroke="#e0f2fe" strokeWidth="1" />;
+        })}
+        <path d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" opacity="0.10" />
+        <path d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+        {points.map((point, i) => {
+          const selected = i === activeIndex || i === points.length - 1;
+          if (!selected && i % Math.max(1, Math.ceil(points.length / 12)) !== 0) return null;
+          const pos = xy(points, line.field, i);
+          return (
+            <circle key={`${line.field}-${point.id}-${i}`} cx={pos.x} cy={pos.y} r={selected ? 4.5 : 2.5} fill="#ffffff" stroke={line.color} strokeWidth={selected ? 2.5 : 1.5}>
+              <title>{`${line.label} ${percent(point[line.field])} • ${timeLabel(point.createdAt)}`}</title>
+            </circle>
+          );
+        })}
+        <line x1={activePoint.x} x2={activePoint.x} y1={CHART.pad.top} y2={CHART.height - CHART.pad.bottom} stroke="#64748b" strokeWidth="1" strokeDasharray="4 4" opacity="0.65" />
+        <circle cx={activePoint.x} cy={activePoint.y} r="6" fill="#ffffff" stroke={line.color} strokeWidth="2.5" />
+        <rect x={chartRight + 12} y={latestPoint.y - 13} width="66" height="26" fill="#ffffff" stroke={line.color} strokeWidth="1" />
+        <text x={chartRight + 45} y={latestPoint.y + 4} fill={line.color} fontSize="12" fontFamily="monospace" fontWeight="700" textAnchor="middle">{percent(latest?.[line.field])}</text>
+        <g transform={`translate(${clamp(activePoint.x + 12, CHART.pad.left + 4, chartRight - 126)} ${CHART.pad.top + 8})`}>
+          <rect width="122" height="44" fill="#ffffff" stroke={line.color} strokeWidth="1" />
+          <text x="8" y="17" fill="#475569" fontSize="10" fontFamily="monospace">{shortTime(active.createdAt)}</text>
+          <text x="8" y="34" fill={line.color} fontSize="13" fontFamily="monospace" fontWeight="700">{line.label} {percent(active[line.field])}</text>
+        </g>
+        <text x={CHART.pad.left} y={CHART.height - 11} fill="#64748b" fontSize="11" fontFamily="monospace">{shortTime(points[0].createdAt)}</text>
+        <text x={(chartRight + CHART.pad.left) / 2} y={CHART.height - 11} fill="#64748b" fontSize="11" fontFamily="monospace" textAnchor="middle">warning 75% • critical 90%</text>
+        <text x={chartRight} y={CHART.height - 11} fill="#64748b" fontSize="11" fontFamily="monospace" textAnchor="end">{shortTime(latest?.createdAt || '')}</text>
+      </svg>
+    </div>
+  );
+};
+
 const LiveLineChart = ({ server, snapshots, range }: { server?: ServerItem; snapshots: MetricSnapshot[]; range: Range }) => {
   const points = compact(snapshots, range === '1m' ? 30 : range === '5m' ? 60 : 120);
   const latest = points.at(-1);
@@ -154,18 +249,6 @@ const LiveLineChart = ({ server, snapshots, range }: { server?: ServerItem; snap
   }
 
   const activeIndex = clamp(hoverIndex ?? points.length - 1, 0, points.length - 1);
-  const active = points[activeIndex];
-  const activeX = xy(points, 'cpuUsage', activeIndex).x;
-  const tooltipX = clamp(activeX + 12, 58, CHART.width - 182);
-  const dotStep = Math.max(1, Math.ceil(points.length / 18));
-
-  const handleMove = (event: React.MouseEvent<SVGSVGElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const viewX = ((event.clientX - rect.left) / rect.width) * CHART.width;
-    const chartW = CHART.width - CHART.pad.left - CHART.pad.right;
-    const ratio = clamp((viewX - CHART.pad.left) / chartW, 0, 1);
-    setHoverIndex(Math.round(ratio * (points.length - 1)));
-  };
 
   return (
     <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-5">
@@ -188,90 +271,18 @@ const LiveLineChart = ({ server, snapshots, range }: { server?: ServerItem; snap
         </div>
       </div>
 
-      <div className="bg-slate-950 border border-slate-800 p-3 md:p-4 overflow-hidden">
-        <svg
-          viewBox={`0 0 ${CHART.width} ${CHART.height}`}
-          className="w-full h-[320px] cursor-crosshair select-none"
-          role="img"
-          aria-label="Live CPU RAM Disk line chart dengan angka detail"
-          onMouseMove={handleMove}
-          onMouseLeave={() => setHoverIndex(null)}
-        >
-          <rect x="0" y="0" width={CHART.width} height={CHART.height} fill="#020617" />
-          {[0, 25, 50, 75, 90, 100].map((value) => {
-            const y = CHART.pad.top + (1 - value / 100) * (CHART.height - CHART.pad.top - CHART.pad.bottom);
-            const guide = value === 75 || value === 90;
-            return (
-              <g key={value}>
-                <line x1={CHART.pad.left} x2={CHART.width - CHART.pad.right} y1={y} y2={y} stroke={value === 90 ? '#ef4444' : value === 75 ? '#eab308' : '#1e293b'} strokeWidth={guide ? 1.5 : 1} strokeDasharray={guide ? '6 6' : '0'} />
-                <text x="12" y={y + 4} fill={guide ? '#e2e8f0' : '#94a3b8'} fontSize="11" fontFamily="monospace" fontWeight={guide ? 700 : 400}>{value}%</text>
-              </g>
-            );
-          })}
-          {points.map((_, i) => {
-            if (i % Math.max(1, Math.floor(points.length / 8)) !== 0 && i !== points.length - 1) return null;
-            const point = xy(points, 'cpuUsage', i);
-            return <line key={i} x1={point.x} x2={point.x} y1={CHART.pad.top} y2={CHART.height - CHART.pad.bottom} stroke="#0f172a" strokeWidth="1" />;
-          })}
-          {RESOURCE_LINES.map((line) => <path key={`${line.field}-glow`} d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />)}
-          {RESOURCE_LINES.map((line) => <path key={line.field} d={pathFor(points, line.field)} fill="none" stroke={line.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />)}
-          {RESOURCE_LINES.map((line) => points.map((point, i) => {
-            if (i % dotStep !== 0 && i !== activeIndex && i !== points.length - 1) return null;
-            const pos = xy(points, line.field, i);
-            const activeDot = i === activeIndex || i === points.length - 1;
-            return (
-              <circle key={`${line.field}-${point.id}-${i}`} cx={pos.x} cy={pos.y} r={activeDot ? 4.5 : 2.75} fill="#020617" stroke={line.color} strokeWidth={activeDot ? 2.5 : 1.5}>
-                <title>{`${line.label} ${percent(point[line.field])} • ${timeLabel(point.createdAt)}`}</title>
-              </circle>
-            );
-          }))}
-          <line x1={activeX} x2={activeX} y1={CHART.pad.top} y2={CHART.height - CHART.pad.bottom} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="4 4" opacity="0.7" />
-          {RESOURCE_LINES.map((line, index) => {
-            const point = xy(points, line.field, points.length - 1);
-            const labelX = CHART.width - CHART.pad.right + 14;
-            const labelY = CHART.pad.top + 20 + index * 32;
-            return (
-              <g key={`${line.field}-latest`}>
-                <line x1={point.x + 6} x2={labelX - 8} y1={point.y} y2={labelY} stroke={line.color} strokeWidth="1" strokeDasharray="3 3" opacity="0.65" />
-                <rect x={labelX} y={labelY - 14} width="84" height="26" fill="#020617" stroke={line.color} strokeWidth="1" />
-                <text x={labelX + 8} y={labelY + 4} fill={line.color} fontSize="12" fontFamily="monospace" fontWeight="700">{line.label} {percent(latest?.[line.field])}</text>
-              </g>
-            );
-          })}
-          <g transform={`translate(${tooltipX} ${CHART.pad.top + 104})`}>
-            <rect width="170" height="92" fill="#020617" stroke="#38bdf8" strokeWidth="1" opacity="0.96" />
-            <text x="10" y="18" fill="#e2e8f0" fontSize="10" fontFamily="monospace" fontWeight="700">{timeLabel(active.createdAt)}</text>
-            {RESOURCE_LINES.map((line, index) => (
-              <g key={`${line.field}-tip`} transform={`translate(10 ${36 + index * 17})`}>
-                <circle cx="0" cy="-4" r="3" fill={line.color} />
-                <text x="10" y="0" fill="#cbd5e1" fontSize="11" fontFamily="monospace">{line.label}</text>
-                <text x="96" y="0" fill={line.color} fontSize="11" fontFamily="monospace" fontWeight="700" textAnchor="end">{percent(active[line.field])}</text>
-              </g>
-            ))}
-          </g>
-          <text x={CHART.pad.left} y={CHART.height - 14} fill="#94a3b8" fontSize="11" fontFamily="monospace">{shortTime(points[0].createdAt)}</text>
-          <text x={(CHART.width - CHART.pad.right + CHART.pad.left) / 2} y={CHART.height - 14} fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="middle">warning 75% • critical 90% • hover untuk detail</text>
-          <text x={CHART.width - CHART.pad.right} y={CHART.height - 14} fill="#94a3b8" fontSize="11" fontFamily="monospace" textAnchor="end">{shortTime(latest?.createdAt || '')}</text>
-        </svg>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {RESOURCE_LINES.map((line) => {
-          const stat = statsOf(points, line.field);
-          return (
-            <div key={`${line.field}-stat`} className="border border-sky-100 bg-sky-50/30 p-4 font-mono text-xs">
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <span className="uppercase tracking-wider font-bold text-slate-700">{line.label} Detail</span>
-                <span style={{ color: line.color }} className="font-bold">Latest {percent(stat.latest)}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-600">
-                <span>Min <b className="text-slate-900">{percent(stat.min)}</b></span>
-                <span>Avg <b className="text-slate-900">{percent(stat.avg)}</b></span>
-                <span>Max <b className="text-slate-900">{percent(stat.max)}</b></span>
-              </div>
-            </div>
-          );
-        })}
+      <div className="space-y-4">
+        {RESOURCE_LINES.map((line) => (
+          <React.Fragment key={line.field}>
+            <MiniLineChart
+              points={points}
+              line={line}
+              activeIndex={activeIndex}
+              onHover={setHoverIndex}
+              onLeave={() => setHoverIndex(null)}
+            />
+          </React.Fragment>
+        ))}
       </div>
     </div>
   );
