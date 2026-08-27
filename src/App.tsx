@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { FeatureSection } from './components/FeatureSection';
@@ -13,14 +13,31 @@ import { AuthModal } from './components/AuthModal';
 import { PlanModal } from './components/PlanModal';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { mockServers, mockAlerts, mockAutomations, mockMaintenances, mockBackups, mockTickets } from './data/mockDashboardData';
+import { DashboardData, fetchDashboardData } from './lib/supabaseRest';
+
+const initialDashboardData: DashboardData = {
+  servers: mockServers,
+  alerts: mockAlerts,
+  automations: mockAutomations,
+  maintenances: mockMaintenances,
+  backups: mockBackups,
+  tickets: mockTickets,
+  source: 'mock',
+};
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
+  const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData);
   
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState({ name: 'PRO', price: 'Rp800.000' });
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    fetchDashboardData().then(setDashboardData);
+  }, [isLoggedIn]);
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
     setAuthMode(mode);
@@ -42,12 +59,12 @@ export default function App() {
   if (isLoggedIn) {
     return (
       <DashboardLayout
-        servers={mockServers}
-        alerts={mockAlerts}
-        automations={mockAutomations}
-        maintenances={mockMaintenances}
-        backups={mockBackups}
-        tickets={mockTickets}
+        servers={dashboardData.servers}
+        alerts={dashboardData.alerts}
+        automations={dashboardData.automations}
+        maintenances={dashboardData.maintenances}
+        backups={dashboardData.backups}
+        tickets={dashboardData.tickets}
         onLogout={() => setIsLoggedIn(false)}
       />
     );
