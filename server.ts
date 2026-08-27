@@ -1,9 +1,10 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { ApiError, createServerRecord, dashboardData, listServers } from './src/server/syncera';
+import handlerDashboard from './api/dashboard';
+import handlerServers from './api/servers';
 
-const bodyOf = (req: express.Request) => typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+const runHandler = (handler: (req: any, res: any) => unknown) => (req: express.Request, res: express.Response) => handler(req, res);
 
 async function startServer() {
   const app = express();
@@ -12,29 +13,9 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.get("/api/dashboard", async (req, res) => {
-    try {
-      res.json(await dashboardData());
-    } catch (err) {
-      res.status(err instanceof ApiError ? err.status : 500).json({ success: false, error: err instanceof Error ? err.message : 'dashboard fetch failed' });
-    }
-  });
-
-  app.get("/api/servers", async (req, res) => {
-    try {
-      res.json({ success: true, servers: await listServers() });
-    } catch (err) {
-      res.status(err instanceof ApiError ? err.status : 500).json({ success: false, error: err instanceof Error ? err.message : 'servers fetch failed' });
-    }
-  });
-
-  app.post("/api/servers", async (req, res) => {
-    try {
-      res.status(201).json({ success: true, server: await createServerRecord(bodyOf(req)) });
-    } catch (err) {
-      res.status(err instanceof ApiError ? err.status : 500).json({ success: false, error: err instanceof Error ? err.message : 'server create failed' });
-    }
-  });
+  app.get("/api/dashboard", runHandler(handlerDashboard));
+  app.get("/api/servers", runHandler(handlerServers));
+  app.post("/api/servers", runHandler(handlerServers));
 
 
   // Vite middleware for development
