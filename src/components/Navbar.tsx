@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Server, ShieldCheck, Terminal, Menu, X, ArrowRight } from 'lucide-react';
+import { Menu, X, ArrowRight } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface NavbarProps {
   onOpenAuth: (mode: 'login' | 'register') => void;
@@ -22,17 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
           onClick={() => handleNavClick('hero')} 
           className="flex items-center space-x-3 cursor-pointer group"
         >
-          <div className="w-10 h-10 bg-sky-500 flex items-center justify-center rounded-none border border-sky-400 shadow-sm">
-            <Server className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <span className="font-mono text-xl font-bold tracking-wider uppercase block leading-none text-slate-900">
-              It's Syncera
-            </span>
-            <span className="text-[10px] text-sky-600 font-mono tracking-widest uppercase mt-0.5 block font-semibold">
-              Infrastructure OS
-            </span>
-          </div>
+          <BrandLogo className="h-12 w-auto max-w-[170px]" />
         </div>
 
         {/* Desktop Navigation */}
@@ -49,9 +40,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
           <button onClick={() => handleNavClick('pricing')} className="hover:text-sky-600 transition-colors">
             PRICING
           </button>
-          <button onClick={() => handleNavClick('console')} className="hover:text-sky-600 transition-colors">
-            CONSOLE
-          </button>
         </nav>
 
         {/* Desktop Action Buttons */}
@@ -63,10 +51,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
             <span>Sign In</span>
           </button>
           <button
-            onClick={() => onOpenAuth('login')}
+            onClick={() => onOpenAuth('register')}
             className="px-5 py-2.5 text-xs font-mono uppercase tracking-wider bg-sky-500 hover:bg-sky-600 text-white rounded-none transition-all flex items-center space-x-2 border border-sky-400 shadow-sm font-bold"
           >
-            <span>Quick Login</span>
+            <span>Sign Up</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -109,18 +97,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
           >
             PRICING
           </button>
-          <button
-            onClick={() => handleNavClick('console')}
-            className="block w-full text-left py-2 text-slate-700 hover:text-sky-600 border-b border-sky-50"
-          >
-            CONSOLE
-          </button>
-          <div className="pt-4">
+          <div className="pt-4 grid grid-cols-2 gap-3">
             <button
               onClick={() => { setMobileMenuOpen(false); onOpenAuth('login'); }}
-              className="w-full py-3 text-xs font-mono uppercase tracking-wider text-center bg-sky-500 text-white rounded-none font-bold"
+              className="w-full py-3 text-xs font-mono uppercase tracking-wider text-center bg-white text-slate-800 border border-sky-300 rounded-none font-bold"
             >
               Sign In
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); onOpenAuth('register'); }}
+              className="w-full py-3 text-xs font-mono uppercase tracking-wider text-center bg-sky-500 text-white rounded-none font-bold"
+            >
+              Sign Up
             </button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import {
   HardDrive, FileText, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Bell 
 } from 'lucide-react';
 import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, BillingAccount, BillingInvoice, BillingPlan, BillingPlanRequest, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
+import { BrandLogo } from '../BrandLogo';
 import { OverviewView } from './views/OverviewView';
 import { ServersView } from './views/ServersView';
 import { MonitoringView } from './views/MonitoringView';
@@ -97,14 +98,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Sidebar for Desktop */}
       <aside className="hidden lg:flex w-64 bg-slate-900 border-r border-sky-900/50 flex-col fixed inset-y-0 z-30">
         {/* Brand */}
-        <div className="p-5 border-b border-sky-900/40 flex items-center space-x-3">
-          <div className="w-8 h-8 bg-sky-500 flex items-center justify-center font-mono font-bold text-white shadow-xs">
-            S
+        <div className="p-5 border-b border-sky-900/40">
+          <div className="bg-white border border-sky-200 p-2 inline-flex max-w-full overflow-hidden">
+            <BrandLogo className="h-12 w-auto max-w-[190px]" />
           </div>
-          <div>
-            <span className="font-mono text-sm font-bold text-white tracking-wider uppercase block leading-none">It's Syncera</span>
-            <span className="font-mono text-[9px] text-sky-400 tracking-widest uppercase block mt-1">Enterprise Cloud</span>
-          </div>
+          <span className="font-mono text-[9px] text-sky-400 tracking-widest uppercase block mt-2">Enterprise Cloud</span>
         </div>
 
         {/* Navigation Links */}
@@ -201,7 +199,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {mobileSidebarOpen && (
           <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 flex flex-col p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-sky-800 pb-4">
-              <span className="font-mono text-white text-sm font-bold uppercase">It's Syncera Console</span>
+              <span className="bg-white border border-sky-200 p-1 inline-flex"><BrandLogo className="h-9 w-auto max-w-[150px]" /></span>
               <button onClick={() => setMobileSidebarOpen(false)} className="text-white p-1">
                 <X className="w-6 h-6" />
               </button>

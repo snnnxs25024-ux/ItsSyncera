@@ -1,5 +1,5 @@
 import React from 'react';
-import { Server } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 export const Footer: React.FC = () => {
   return (
@@ -8,13 +8,8 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           
           <div className="space-y-4">
-            <div className="flex items-center space-x-3 text-white">
-              <div className="w-8 h-8 bg-[#2563EB] flex items-center justify-center rounded-none border border-blue-400">
-                <Server className="w-4 h-4 text-white" />
-              </div>
-              <span className="font-mono text-lg font-bold tracking-wider uppercase">
-                It's Syncera
-              </span>
+            <div className="bg-white border border-sky-200 p-2 inline-flex">
+              <BrandLogo className="h-14 w-auto max-w-[190px]" />
             </div>
             <p className="text-slate-400 font-sans text-sm leading-relaxed">
               Platform Server Monitoring, Maintenance, dan Automation Infrastructure Management berstandar enterprise.
@@ -34,10 +29,10 @@ export const Footer: React.FC = () => {
           <div>
             <h4 className="font-bold text-white uppercase tracking-wider mb-4">Resources</h4>
             <ul className="space-y-2.5">
-              <li><a href="#workflow" className="hover:text-cyan-400 transition-colors">Documentation</a></li>
-              <li><a href="#console" className="hover:text-cyan-400 transition-colors">API Reference</a></li>
+              <li><a href="#workflow" className="hover:text-cyan-400 transition-colors">Workflow</a></li>
+              <li><a href="#features" className="hover:text-cyan-400 transition-colors">Features</a></li>
               <li><a href="#pricing" className="hover:text-cyan-400 transition-colors">Pricing Plans</a></li>
-              <li><a href="#console" className="hover:text-cyan-400 transition-colors">System Status</a></li>
+              <li><a href="#features" className="hover:text-cyan-400 transition-colors">System Status</a></li>
             </ul>
           </div>
 
@@ -55,7 +50,7 @@ export const Footer: React.FC = () => {
 
         <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between text-slate-500">
           <div>
-            © {new Date().getFullYear()} It's Syncera Inc. All rights reserved.
+            © {new Date().getFullYear()} It's Syncera. All rights reserved.
           </div>
           <div className="flex items-center space-x-6 mt-4 sm:mt-0">
             <span className="flex items-center space-x-2">
