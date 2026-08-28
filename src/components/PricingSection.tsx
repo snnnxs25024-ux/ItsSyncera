@@ -12,49 +12,63 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onSelectPlan }) 
     {
       name: "BASIC",
       priceMonthly: "Rp350.000",
-      priceAnnual: "Rp3.150.000",
-      period: "/month",
-      desc: "Untuk bisnis kecil dengan kebutuhan monitoring dasar.",
+      priceAnnual: "Rp3.360.000",
+      annualMonthly: "Rp280.000",
+      period: "/bulan",
+      desc: "Untuk usaha kecil yang ingin 1 server tetap terpantau.",
       badge: null,
       features: [
-        "Server monitoring",
-        "Basic health check",
-        "Error notification",
-        "Monthly report",
-        "Basic support"
+        "Maks 1 server",
+        "CPU, RAM, disk monitoring",
+        "Website uptime check",
+        "Dashboard alert basic",
+        "Backup status check",
+        "Laporan bulanan",
+        "Support jam kerja",
+        "SLA respons 1x24 jam"
       ],
       highlighted: false
     },
     {
       name: "PRO",
       priceMonthly: "Rp800.000",
-      priceAnnual: "Rp7.200.000",
-      period: "/month",
-      desc: "Untuk perusahaan berkembang yang membutuhkan otomatisasi.",
+      priceAnnual: "Rp7.680.000",
+      annualMonthly: "Rp640.000",
+      period: "/bulan",
+      desc: "Untuk bisnis aktif dengan beberapa server dan kebutuhan operasional rutin.",
       badge: "MOST POPULAR",
       features: [
-        "Semua BASIC",
-        "Advanced monitoring",
-        "Automated maintenance",
-        "Backup monitoring",
-        "Performance optimization",
-        "Priority support"
+        "Maks 5 server",
+        "Semua fitur BASIC",
+        "SSL/domain status",
+        "Backup monitoring detail",
+        "Maintenance reminder",
+        "Laporan mingguan",
+        "Rekomendasi optimasi server",
+        "Priority support",
+        "SLA respons 6 jam"
       ],
       highlighted: true
     },
     {
       name: "ULTIMATE",
       priceMonthly: "Rp1.500.000",
-      priceAnnual: "Rp13.500.000",
-      period: "/month",
-      desc: "Infrastruktur skala besar dengan keamanan dan kustomisasi penuh.",
+      priceAnnual: "Rp14.400.000",
+      annualMonthly: "Rp1.200.000",
+      period: "/bulan",
+      desc: "Untuk operasional penting yang butuh kontrol, automation, dan laporan lebih lengkap.",
       badge: null,
       features: [
-        "Semua PRO",
-        "Advanced automation",
-        "Security monitoring",
-        "Custom workflow",
-        "Priority engineer support"
+        "Maks 15 server",
+        "Semua fitur PRO",
+        "Automation rules dengan approval",
+        "Auto health-check via connector aktif",
+        "Incident report",
+        "Security monitoring basic",
+        "Monthly performance review",
+        "Custom workflow ringan",
+        "Priority engineer support",
+        "SLA respons 2 jam"
       ],
       highlighted: false
     }
@@ -103,9 +117,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onSelectPlan }) 
         {/* Pricing Cards Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
           {plans.map((plan, idx) => {
-            const displayPrice = billingCycle === 'annual' 
-              ? (idx === 0 ? "Rp280.000" : idx === 1 ? "Rp640.000" : "Rp1.200.000")
-              : plan.priceMonthly;
+            const displayPrice = billingCycle === 'annual' ? plan.annualMonthly : plan.priceMonthly;
 
             return (
               <div

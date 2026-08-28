@@ -164,6 +164,23 @@ create table if not exists billing_plan_requests (
 
 create index if not exists billing_plan_requests_requested_idx on billing_plan_requests(requested_at desc);
 
+insert into billing_plans (id, name, price, currency, billing_cycle, server_limit, monitoring_interval, support_level, backup_retention, features, status)
+values
+  ('basic', 'BASIC', 'Rp350.000', 'IDR', 'monthly', 1, '5 menit', 'Jam kerja, respons 1x24 jam', 'Status check', '["CPU, RAM, disk monitoring", "Website uptime check", "Dashboard alert basic", "Backup status check", "Laporan bulanan"]'::jsonb, 'active'),
+  ('pro', 'PRO', 'Rp800.000', 'IDR', 'monthly', 5, '1 menit', 'Prioritas, respons 6 jam', 'Detail monitoring', '["Semua fitur BASIC", "SSL/domain status", "Backup monitoring detail", "Maintenance reminder", "Laporan mingguan", "Rekomendasi optimasi server"]'::jsonb, 'active'),
+  ('ultimate', 'ULTIMATE', 'Rp1.500.000', 'IDR', 'monthly', 15, '1 menit', 'Prioritas tinggi, respons 2 jam', 'Detail monitoring + review', '["Semua fitur PRO", "Automation rules dengan approval", "Auto health-check via connector aktif", "Incident report", "Security monitoring basic", "Monthly performance review", "Custom workflow ringan"]'::jsonb, 'active')
+on conflict (id) do update set
+  name = excluded.name,
+  price = excluded.price,
+  currency = excluded.currency,
+  billing_cycle = excluded.billing_cycle,
+  server_limit = excluded.server_limit,
+  monitoring_interval = excluded.monitoring_interval,
+  support_level = excluded.support_level,
+  backup_retention = excluded.backup_retention,
+  features = excluded.features,
+  status = excluded.status;
+
 alter table servers enable row level security;
 alter table alerts enable row level security;
 alter table metric_snapshots enable row level security;
