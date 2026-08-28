@@ -17,13 +17,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
 
   return (
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md text-slate-800 border-b border-sky-100 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-24 flex items-center justify-between">
         {/* Logo */}
         <div 
           onClick={() => handleNavClick('hero')} 
           className="flex items-center space-x-3 cursor-pointer group"
         >
-          <BrandLogo className="h-12 w-auto max-w-[170px]" />
+          <BrandLogo className="h-20 w-auto max-w-[260px]" />
         </div>
 
         {/* Desktop Navigation */}
