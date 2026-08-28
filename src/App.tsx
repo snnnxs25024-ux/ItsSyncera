@@ -5,7 +5,6 @@ import { FeatureSection } from './components/FeatureSection';
 import { ProblemSection } from './components/ProblemSection';
 import { HowItWorksSection } from './components/HowItWorksSection';
 import { PricingSection } from './components/PricingSection';
-import { DashboardPreviewSection } from './components/DashboardPreviewSection';
 import { TrustSection } from './components/TrustSection';
 import { FinalCTASection } from './components/FinalCTASection';
 import { Footer } from './components/Footer';
@@ -117,9 +116,6 @@ export default function App() {
 
       {/* Pricing Section */}
       <PricingSection onSelectPlan={handleSelectPlan} />
-
-      {/* Dashboard Preview Section */}
-      <DashboardPreviewSection />
 
       {/* Trust Section */}
       <TrustSection />
