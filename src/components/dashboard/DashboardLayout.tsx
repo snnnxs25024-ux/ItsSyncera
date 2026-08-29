@@ -106,7 +106,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-1.5 space-y-1 overflow-y-auto">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -117,7 +117,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   setCurrentTab(item.id);
                   if (item.id !== 'servers') setSelectedServer(null);
                 }}
-                className={`w-full flex items-center ${desktopSidebarOpen ? 'justify-between px-3' : 'justify-center px-2'} py-2 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                className={`w-full flex items-center ${desktopSidebarOpen ? 'justify-between px-2.5' : 'justify-center px-1.5'} py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors ${
                   isActive
                     ? 'bg-sky-500 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50'
@@ -138,10 +138,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </nav>
 
         {/* Logout */}
-        <div className="p-2 border-t border-sky-100">
+        <div className="p-1.5 border-t border-sky-100">
           <button
             onClick={onLogout}
-            className={`w-full flex items-center ${desktopSidebarOpen ? 'space-x-3 px-3' : 'justify-center px-2'} py-2 font-mono text-[11px] uppercase tracking-wider text-rose-600 hover:bg-rose-50 transition-colors border border-rose-100`}
+            className={`w-full flex items-center ${desktopSidebarOpen ? 'space-x-2 px-2.5' : 'justify-center px-1.5'} py-1.5 font-mono text-[11px] uppercase tracking-wider text-rose-600 hover:bg-rose-50 transition-colors border border-rose-100`}
           >
             <LogOut className="w-4 h-4" />
             {desktopSidebarOpen && <span>Sign Out Session</span>}
@@ -152,7 +152,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Main Content Area */}
       <div className={`flex-1 ${desktopSidebarOpen ? 'lg:pl-48' : 'lg:pl-16'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
         {/* Top Navbar */}
-        <header className="bg-white border-b border-sky-200 h-14 flex items-center justify-between px-3 lg:px-4 sticky top-0 z-20 shadow-xs">
+        <header className="bg-white border-b border-sky-200 h-14 flex items-center justify-between px-2 lg:px-3 sticky top-0 z-20 shadow-xs">
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
@@ -236,7 +236,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
 
         {/* View Switcher Container */}
-        <main className="flex-1 p-3 lg:p-4 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-2 lg:p-3 max-w-7xl w-full mx-auto">
           {currentTab === 'overview' && (
             <OverviewView 
               servers={servers} 
