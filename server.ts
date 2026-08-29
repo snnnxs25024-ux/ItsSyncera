@@ -6,6 +6,10 @@ import handlerAgentInstall from './api/agent/install';
 import handlerAutomationRun from './api/automation/run';
 import handlerBillingUpgrade from './api/billing/upgrade';
 import handlerDashboard from './api/dashboard';
+import handlerAuthLogin from './api/auth/login';
+import handlerAuthLogout from './api/auth/logout';
+import handlerAuthMe from './api/auth/me';
+import handlerAuthSignup from './api/auth/signup';
 import handlerServers from './api/servers';
 import handlerSettingsStatus from './api/settings/status';
 
@@ -19,6 +23,10 @@ async function startServer() {
 
   // API Routes
   app.get("/api/dashboard", runHandler(handlerDashboard));
+  app.post("/api/auth/login", runHandler(handlerAuthLogin));
+  app.post("/api/auth/logout", runHandler(handlerAuthLogout));
+  app.get("/api/auth/me", runHandler(handlerAuthMe));
+  app.post("/api/auth/signup", runHandler(handlerAuthSignup));
   app.get("/api/automation/run", runHandler(handlerAutomationRun));
   app.post("/api/automation/run", runHandler(handlerAutomationRun));
   app.get("/api/billing/upgrade", runHandler(handlerBillingUpgrade));

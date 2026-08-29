@@ -9,7 +9,6 @@ import { TrustSection } from './components/TrustSection';
 import { FinalCTASection } from './components/FinalCTASection';
 import { Footer } from './components/Footer';
 import { AuthModal } from './components/AuthModal';
-import { PlanModal } from './components/PlanModal';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { DashboardData, fetchDashboardData } from './lib/supabaseRest';
 
@@ -36,11 +35,16 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData);
   
-  const [planModalOpen, setPlanModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState({ name: 'PRO', price: 'Rp800.000' });
 
   const loadDashboardData = useCallback(() => {
     fetchDashboardData().then(setDashboardData);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => setIsLoggedIn(Boolean(data.user)))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -64,10 +68,9 @@ export default function App() {
     }
   };
 
-  const handleSelectPlan = (name: string, price: string) => {
-    setSelectedPlan({ name, price });
-    setPlanModalOpen(true);
-  };
+  const handleSelectPlan = useCallback((_name: string, _price: string) => {
+    handleOpenAuth('register');
+  }, []);
 
   if (isLoggedIn) {
     return (
@@ -86,7 +89,10 @@ export default function App() {
         tickets={dashboardData.tickets}
         metricSnapshots={dashboardData.metricSnapshots}
         onRefreshData={loadDashboardData}
-        onLogout={() => setIsLoggedIn(false)}
+        onLogout={async () => {
+          await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+          setIsLoggedIn(false);
+        }}
       />
     );
   }
@@ -134,12 +140,6 @@ export default function App() {
         onSuccess={() => setIsLoggedIn(true)}
       />
 
-      <PlanModal 
-        isOpen={planModalOpen}
-        planName={selectedPlan.name}
-        price={selectedPlan.price}
-        onClose={() => setPlanModalOpen(false)}
-      />
     </div>
   );
 }

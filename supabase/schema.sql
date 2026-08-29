@@ -164,6 +164,52 @@ create table if not exists billing_plan_requests (
 
 create index if not exists billing_plan_requests_requested_idx on billing_plan_requests(requested_at desc);
 
+create table if not exists user_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  full_name text not null,
+  phone text not null,
+  company_name text not null,
+  company_address text not null,
+  company_phone text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.user_profiles (id, email, full_name, phone, company_name, company_address, company_phone)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    coalesce(new.raw_user_meta_data->>'phone', ''),
+    coalesce(new.raw_user_meta_data->>'company_name', ''),
+    coalesce(new.raw_user_meta_data->>'company_address', ''),
+    coalesce(new.raw_user_meta_data->>'company_phone', '')
+  )
+  on conflict (id) do update set
+    email = excluded.email,
+    full_name = excluded.full_name,
+    phone = excluded.phone,
+    company_name = excluded.company_name,
+    company_address = excluded.company_address,
+    company_phone = excluded.company_phone,
+    updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+create trigger on_auth_user_created_profile
+after insert on auth.users
+for each row execute function public.handle_new_user_profile();
+
 insert into billing_plans (id, name, price, currency, billing_cycle, server_limit, monitoring_interval, support_level, backup_retention, features, status)
 values
   ('basic', 'BASIC', 'Rp350.000', 'IDR', 'monthly', 1, '5 menit', 'Jam kerja, respons 1x24 jam', 'Status check', '["CPU, RAM, disk monitoring", "Website uptime check", "Dashboard alert basic", "Backup status check", "Laporan bulanan"]'::jsonb, 'active'),
@@ -194,6 +240,7 @@ alter table billing_accounts enable row level security;
 alter table billing_plans enable row level security;
 alter table billing_invoices enable row level security;
 alter table billing_plan_requests enable row level security;
+alter table user_profiles enable row level security;
 
 do $$ begin
   create policy "public read servers" on servers for select using (true);
@@ -233,4 +280,10 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read billing_plan_requests" on billing_plan_requests for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "users read own profile" on user_profiles for select using (auth.uid() = id);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "users update own profile" on user_profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 exception when duplicate_object then null; end $$;
