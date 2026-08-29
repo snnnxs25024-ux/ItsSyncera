@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Server, ArrowLeft, ShieldCheck, Activity, Cpu, HardDrive, Wifi, CheckCircle2, AlertTriangle, RefreshCw, Plus, Terminal, Copy, Check, KeyRound, Cloud, PlugZap, Trash2, Pencil } from 'lucide-react';
 import { ServerItem } from '../../../types/dashboard';
+import { composeProxmoxToken } from '../../../lib/proxmoxToken';
 
 interface ServersViewProps {
   servers: ServerItem[];
@@ -42,7 +43,9 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const [serverLocation, setServerLocation] = useState('Jakarta DC');
   const [createdServer, setCreatedServer] = useState<(ServerItem & { installCommand?: string }) | null>(null);
   const [copied, setCopied] = useState(false);
-  const [proxmoxToken, setProxmoxToken] = useState('');
+  const [proxmoxUser, setProxmoxUser] = useState('root@pam');
+  const [proxmoxTokenId, setProxmoxTokenId] = useState('syncera');
+  const [proxmoxSecret, setProxmoxSecret] = useState('');
   const [proxmoxUrlMode, setProxmoxUrlMode] = useState<'hostPort' | 'fullUrl'>('fullUrl');
   const [proxmoxPort, setProxmoxPort] = useState('8006');
   const [proxmoxStatus, setProxmoxStatus] = useState<'idle' | 'connecting' | 'ok' | 'error'>('idle');
@@ -100,6 +103,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   };
 
   const allServers = servers;
+  const proxmoxTokenPreview = `${proxmoxUser.trim() || 'root@pam'}!${proxmoxTokenId.trim() || 'syncera'}=${proxmoxSecret.trim() ? '••••••••' : 'secret'}`;
   const filteredServers = allServers.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.ipAddress.includes(searchTerm) || s.provider.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'all' || s.status === filterStatus;
@@ -117,7 +121,9 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
     setServerLocation('Jakarta DC');
     setCreatedServer(null);
     setCopied(false);
-    setProxmoxToken('');
+    setProxmoxUser('root@pam');
+    setProxmoxTokenId('syncera');
+    setProxmoxSecret('');
     setProxmoxUrlMode('fullUrl');
     setProxmoxPort('8006');
     setProxmoxStatus('idle');
@@ -184,7 +190,13 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
       const res = await fetch('/api/connectors/proxmox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: createdServer.id, token: proxmoxToken, host: serverIp, port: proxmoxPort, urlMode: proxmoxUrlMode }),
+        body: JSON.stringify({
+          serverId: createdServer.id,
+          token: composeProxmoxToken({ user: proxmoxUser, tokenId: proxmoxTokenId, secret: proxmoxSecret }),
+          host: serverIp,
+          port: proxmoxPort,
+          urlMode: proxmoxUrlMode,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'Gagal menghubungkan Proxmox');
@@ -589,29 +601,75 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                         <span className={`block text-[10px] mt-1 font-sans ${proxmoxUrlMode === 'hostPort' ? 'text-sky-50' : 'text-slate-500'}`}>Default Proxmox: domain/IP + 8006</span>
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className={proxmoxUrlMode === 'hostPort' ? 'md:col-span-2' : 'md:col-span-3'}>
-                        <label className="block font-bold text-slate-700 mb-1">Proxmox API Token</label>
-                        <input
-                          type="password"
-                          required
-                          placeholder="root@pam!syncera=xxxx-xxxx-..."
-                          value={proxmoxToken}
-                          onChange={(e) => setProxmoxToken(e.target.value)}
-                          className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
-                      {proxmoxUrlMode === 'hostPort' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-3">
+                      <div className="space-y-3 border border-sky-200 bg-white p-3">
                         <div>
-                          <label className="block font-bold text-slate-700 mb-1">Port API</label>
-                          <input
-                            type="text"
-                            value={proxmoxPort}
-                            onChange={(e) => setProxmoxPort(e.target.value)}
-                            className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
-                          />
+                          <p className="font-bold text-slate-900 uppercase text-[11px]">Tahap 2 — Kredensial Proxmox</p>
+                          <p className="text-[10px] text-slate-500 font-sans">Isi 3 field ini. Syncera otomatis gabung jadi token API.</p>
                         </div>
-                      )}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">API User</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="root@pam"
+                              value={proxmoxUser}
+                              onChange={(e) => setProxmoxUser(e.target.value)}
+                              className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Token ID</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="syncera"
+                              value={proxmoxTokenId}
+                              onChange={(e) => setProxmoxTokenId(e.target.value)}
+                              className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Secret</label>
+                            <input
+                              type="password"
+                              required
+                              placeholder="xxxx-xxxx-..."
+                              value={proxmoxSecret}
+                              onChange={(e) => setProxmoxSecret(e.target.value)}
+                              className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                        </div>
+                        {proxmoxUrlMode === 'hostPort' && (
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Port API</label>
+                            <input
+                              type="text"
+                              value={proxmoxPort}
+                              onChange={(e) => setProxmoxPort(e.target.value)}
+                              className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                            />
+                          </div>
+                        )}
+                        <div className="bg-slate-900 text-emerald-300 border border-slate-700 p-2.5 font-mono text-[10px] overflow-x-auto">
+                          Preview: {proxmoxTokenPreview}
+                        </div>
+                      </div>
+                      <div className="border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900 font-sans space-y-2">
+                        <p className="font-bold uppercase font-mono text-[11px] text-amber-950">Panduan Token</p>
+                        <ol className="list-decimal pl-4 space-y-1">
+                          <li>Login Proxmox → Datacenter → Permissions → API Tokens.</li>
+                          <li>Add token: User <b>root@pam</b>, Token ID <b>syncera</b>.</li>
+                          <li>Permission path <b>/</b>, role minimal <b>PVEAuditor</b>, centang <b>Propagate</b>.</li>
+                          <li>Copy <b>Secret</b> yang muncul sekali saja.</li>
+                        </ol>
+                        <div className="pt-2 border-t border-amber-200 space-y-1">
+                          <p><b>403</b>: permission/token role salah.</p>
+                          <p><b>fetch failed</b>: URL, reverse proxy, firewall, atau SSL.</p>
+                        </div>
+                      </div>
                     </div>
                     <button
                       type="submit"
@@ -628,19 +686,21 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                   </form>
                 )}
 
-                <div className="space-y-2">
-                  <label className="block font-bold text-slate-700">Setup reference:</label>
-                  <div className="bg-slate-900 text-emerald-400 p-3 rounded-none font-mono text-[11px] flex items-center justify-between overflow-x-auto">
-                    <code>{setupReference(createdServer.id)}</code>
-                    <button
-                      onClick={() => copyAgentCommand(createdServer.id)}
-                      className="ml-2 px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white uppercase text-[10px] flex items-center space-x-1 shrink-0"
-                    >
-                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                      <span>{copied ? 'Copied' : 'Copy'}</span>
-                    </button>
+                {connectionType !== 'proxmox' && (
+                  <div className="space-y-2">
+                    <label className="block font-bold text-slate-700">Setup reference:</label>
+                    <div className="bg-slate-900 text-emerald-400 p-3 rounded-none font-mono text-[11px] flex items-center justify-between overflow-x-auto">
+                      <code>{setupReference(createdServer.id)}</code>
+                      <button
+                        onClick={() => copyAgentCommand(createdServer.id)}
+                        className="ml-2 px-2.5 py-1 bg-sky-500 hover:bg-sky-600 text-white uppercase text-[10px] flex items-center space-x-1 shrink-0"
+                      >
+                        {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        <span>{copied ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="pt-4 flex justify-end">
                   <button
