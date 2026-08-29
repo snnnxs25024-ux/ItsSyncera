@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import login from '../api/auth/login';
-import logout from '../api/auth/logout';
-import me from '../api/auth/me';
-import signup from '../api/auth/signup';
+import login from '../api/auth/login.ts';
+import logout from '../api/auth/logout.ts';
+import me from '../api/auth/me.ts';
+import signup from '../api/auth/signup.ts';
 
 const res = () => {
   const out: any = { code: 0, headers: {}, body: null };

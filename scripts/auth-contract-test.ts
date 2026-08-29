@@ -6,7 +6,7 @@ import {
   toAuthProfile,
   validateEmailPassword,
   validateSignupBody,
-} from '../api/auth/_supabase';
+} from '../api/auth/_supabase.ts';
 
 assert.equal(normalizeSupabaseUrl('https://demo.supabase.co/rest/v1/'), 'https://demo.supabase.co');
 assert.equal(normalizeSupabaseUrl('https://demo.supabase.co/'), 'https://demo.supabase.co');

@@ -1,4 +1,4 @@
-import { ApiError, readAuthBody, send, sessionTokenFromCookie, supabaseUrl, userAuthHeaders } from './_supabase';
+import { ApiError, readAuthBody, send, sessionTokenFromCookie, supabaseUrl, userAuthHeaders } from './_supabase.ts';
 
 export default async function handler(req: any, res: any) {
   try {

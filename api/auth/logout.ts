@@ -1,4 +1,4 @@
-import { clearAuthCookie, send } from './_supabase';
+import { clearAuthCookie, send } from './_supabase.ts';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {

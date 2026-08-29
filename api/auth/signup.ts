@@ -6,7 +6,7 @@ import {
   send,
   supabaseUrl,
   validateSignupBody,
-} from './_supabase';
+} from './_supabase.ts';
 
 export default async function handler(req: any, res: any) {
   try {
