@@ -12,6 +12,7 @@ import handlerAuthMe from './api/auth/me';
 import handlerAuthSignup from './api/auth/signup';
 import handlerServers from './api/servers';
 import handlerSettingsStatus from './api/settings/status';
+import handlerConnectorProxmox from './api/connectors/proxmox';
 
 const runHandler = (handler: (req: any, res: any) => unknown) => (req: express.Request, res: express.Response) => handler(req, res);
 
@@ -36,6 +37,8 @@ async function startServer() {
   app.get("/api/servers", runHandler(handlerServers));
   app.post("/api/servers", runHandler(handlerServers));
   app.get("/api/settings/status", runHandler(handlerSettingsStatus));
+  app.get("/api/connectors/proxmox", runHandler(handlerConnectorProxmox));
+  app.post("/api/connectors/proxmox", runHandler(handlerConnectorProxmox));
 
 
   // Vite middleware for development

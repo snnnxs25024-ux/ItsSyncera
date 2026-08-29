@@ -25,6 +25,10 @@ create table if not exists servers (
   updated_at timestamptz not null default now()
 );
 
+alter table servers add column if not exists proxmox_token text;
+alter table servers add column if not exists proxmox_host text;
+alter table servers add column if not exists proxmox_port text default '8006';
+
 create table if not exists alerts (
   id text primary key,
   severity text not null default 'information' check (severity in ('critical', 'warning', 'information')),

@@ -42,6 +42,10 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const [serverLocation, setServerLocation] = useState('Jakarta DC');
   const [createdServer, setCreatedServer] = useState<(ServerItem & { installCommand?: string }) | null>(null);
   const [copied, setCopied] = useState(false);
+  const [proxmoxToken, setProxmoxToken] = useState('');
+  const [proxmoxPort, setProxmoxPort] = useState('8006');
+  const [proxmoxStatus, setProxmoxStatus] = useState<'idle' | 'connecting' | 'ok' | 'error'>('idle');
+  const [proxmoxResult, setProxmoxResult] = useState('');
 
   const allServers = servers;
   const filteredServers = allServers.filter(s => {
@@ -61,6 +65,10 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
     setServerLocation('Jakarta DC');
     setCreatedServer(null);
     setCopied(false);
+    setProxmoxToken('');
+    setProxmoxPort('8006');
+    setProxmoxStatus('idle');
+    setProxmoxResult('');
     setFormError('');
     setFormStatus('idle');
   };
@@ -111,6 +119,29 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
     navigator.clipboard.writeText(cmd);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleProxmoxTokenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createdServer) return;
+    setFormError('');
+    setProxmoxStatus('connecting');
+    setProxmoxResult('');
+    try {
+      const res = await fetch('/api/connectors/proxmox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId: createdServer.id, token: proxmoxToken, host: serverIp, port: proxmoxPort }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'Gagal menghubungkan Proxmox');
+      setProxmoxStatus('ok');
+      setProxmoxResult(`Connected · PVE ${data.metrics?.version || '?'} · CPU ${data.metrics?.cpuUsage ?? 0}% · RAM ${data.metrics?.memoryUsage ?? 0}%`);
+      if (onRefreshServers) onRefreshServers();
+    } catch (err) {
+      setProxmoxStatus('error');
+      setProxmoxResult(err instanceof Error ? err.message : 'Gagal menghubungkan Proxmox');
+    }
   };
 
   if (selectedServer) {
@@ -484,6 +515,45 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                     Connection Type: {connectionLabel(createdServer.connectionType as ConnectionType)}. {connectionType === 'website' ? 'Probe awal sudah dijalankan.' : connectionType === 'agent' ? 'Jalankan command di bawah untuk mulai telemetry real.' : 'Data tersimpan permanen di database.'}
                   </p>
                 </div>
+
+                {connectionType === 'proxmox' && (
+                  <form onSubmit={handleProxmoxTokenSubmit} className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-2">
+                        <label className="block font-bold text-slate-700 mb-1">Proxmox API Token</label>
+                        <input
+                          type="password"
+                          required
+                          placeholder="root@pam!syncera=xxxx-xxxx-..."
+                          value={proxmoxToken}
+                          onChange={(e) => setProxmoxToken(e.target.value)}
+                          className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Port API</label>
+                        <input
+                          type="text"
+                          value={proxmoxPort}
+                          onChange={(e) => setProxmoxPort(e.target.value)}
+                          className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={proxmoxStatus === 'connecting'}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white uppercase font-bold text-[11px] border border-emerald-400 shadow-xs"
+                    >
+                      {proxmoxStatus === 'connecting' ? 'Menghubungkan...' : 'Test & Connect Proxmox'}
+                    </button>
+                    {proxmoxResult && (
+                      <div className={`p-2.5 border text-[11px] font-sans ${proxmoxStatus === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+                        {proxmoxResult}
+                      </div>
+                    )}
+                  </form>
+                )}
 
                 <div className="space-y-2">
                   <label className="block font-bold text-slate-700">Setup reference:</label>
