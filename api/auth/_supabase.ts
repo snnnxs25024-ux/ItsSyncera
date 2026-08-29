@@ -17,7 +17,7 @@ export class ApiError extends Error {
 }
 
 export const normalizeSupabaseUrl = (url: string) => url.replace(/\/$/, '').replace(/\/rest\/v1\/?$/, '');
-export const supabaseUrl = () => normalizeSupabaseUrl(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://Supa.kidut.online');
+export const supabaseUrl = () => normalizeSupabaseUrl(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://aulljwxosjdaixtzcqjx.supabase.co');
 export const serviceKey = () => process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 export const anonKey = () => process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 

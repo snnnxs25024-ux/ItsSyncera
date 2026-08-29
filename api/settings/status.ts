@@ -15,7 +15,7 @@ class ApiError extends Error {
 }
 
 const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const baseUrl = (rawSupabaseUrl || 'https://Supa.kidut.online').replace(/\/$/, '').replace(/\/rest\/v1$/, '');
+const baseUrl = (rawSupabaseUrl || 'https://aulljwxosjdaixtzcqjx.supabase.co').replace(/\/$/, '').replace(/\/rest\/v1$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const appUrl = (req: any) => {
