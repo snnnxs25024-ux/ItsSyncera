@@ -1,4 +1,4 @@
-import { proxmoxBaseUrl } from '../connectors/proxmox';
+import { proxmoxBaseUrl } from '../../api/connectors/proxmox';
 
 type Row = Record<string, any>;
 

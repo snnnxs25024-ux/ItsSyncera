@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { findProxmoxServer, proxmoxAutomationMessage } from '../api/automation/proxmox.ts';
+import { findProxmoxServer, proxmoxAutomationMessage } from '../src/lib/proxmoxAutomation.ts';
 
 const servers = [
   { id: 'srv-web', name: 'Website', connection_type: 'agent' },

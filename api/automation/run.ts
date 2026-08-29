@@ -1,5 +1,5 @@
 import { collectProxmoxMetrics } from '../connectors/proxmox';
-import { findProxmoxServer, proxmoxAutomationMessage, proxmoxServerBase } from './proxmox';
+import { findProxmoxServer, proxmoxAutomationMessage, proxmoxServerBase } from '../../src/lib/proxmoxAutomation';
 
 type Row = Record<string, any>;
 
