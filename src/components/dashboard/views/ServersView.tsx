@@ -728,9 +728,9 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
       )}
 
       {/* Servers Table */}
-      <div className="bg-white border border-sky-200 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left font-mono text-xs">
+      <div className="bg-white border border-sky-200 shadow-xs overflow-hidden min-w-0">
+        <div className="w-full overflow-x-auto">
+          <table className="min-w-[1040px] w-full text-left font-mono text-xs">
             <thead className="bg-sky-50/70 border-b border-sky-200 text-slate-600 text-[10px] uppercase">
               <tr>
                 <th className="p-4">Server Name</th>

@@ -95,9 +95,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-sky-50/30 font-sans flex text-slate-900 antialiased">
+    <div className="min-h-screen bg-sky-50/30 font-sans flex text-slate-900 antialiased overflow-x-hidden">
       {/* Sidebar for Desktop */}
-      <aside className={`hidden lg:flex ${desktopSidebarOpen ? 'w-48' : 'w-16'} bg-white border-r border-sky-100 flex-col fixed inset-y-0 z-30 transition-all duration-200 shadow-sm`}>
+      <aside className={`hidden lg:flex ${desktopSidebarOpen ? 'w-48' : 'w-16'} shrink-0 bg-white border-r border-sky-100 flex-col fixed inset-y-0 z-30 transition-all duration-200 shadow-sm`}>
         <button
           onClick={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
           className="absolute -right-3 top-5 hidden h-7 w-7 items-center justify-center border border-sky-200 bg-white text-slate-600 shadow-sm hover:text-sky-600 lg:flex"
@@ -157,7 +157,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </aside>
 
       {/* Main Content Area */}
-      <div className={`flex-1 ${desktopSidebarOpen ? 'lg:pl-48' : 'lg:pl-16'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
+      <div className={`flex-1 min-w-0 ${desktopSidebarOpen ? 'lg:pl-48' : 'lg:pl-16'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
         {/* Top Navbar */}
         <header className="bg-white border-b border-sky-200 h-14 flex items-center justify-between px-2 lg:px-3 sticky top-0 z-20 shadow-xs">
           <div className="flex items-center space-x-2">
@@ -236,7 +236,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
 
         {/* View Switcher Container */}
-        <main className="flex-1 p-2 lg:p-3 max-w-7xl w-full mx-auto">
+        <main className="flex-1 min-w-0 p-2 lg:p-3 max-w-7xl w-full mx-auto">
           {currentTab === 'overview' && (
             <OverviewView 
               servers={servers} 
