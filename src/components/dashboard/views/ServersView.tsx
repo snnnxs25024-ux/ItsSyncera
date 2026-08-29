@@ -43,6 +43,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const [createdServer, setCreatedServer] = useState<(ServerItem & { installCommand?: string }) | null>(null);
   const [copied, setCopied] = useState(false);
   const [proxmoxToken, setProxmoxToken] = useState('');
+  const [proxmoxUrlMode, setProxmoxUrlMode] = useState<'hostPort' | 'fullUrl'>('fullUrl');
   const [proxmoxPort, setProxmoxPort] = useState('8006');
   const [proxmoxStatus, setProxmoxStatus] = useState<'idle' | 'connecting' | 'ok' | 'error'>('idle');
   const [proxmoxResult, setProxmoxResult] = useState('');
@@ -117,6 +118,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
     setCreatedServer(null);
     setCopied(false);
     setProxmoxToken('');
+    setProxmoxUrlMode('fullUrl');
     setProxmoxPort('8006');
     setProxmoxStatus('idle');
     setProxmoxResult('');
@@ -182,7 +184,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
       const res = await fetch('/api/connectors/proxmox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId: createdServer.id, token: proxmoxToken, host: serverIp, port: proxmoxPort }),
+        body: JSON.stringify({ serverId: createdServer.id, token: proxmoxToken, host: serverIp, port: proxmoxPort, urlMode: proxmoxUrlMode }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || 'Gagal menghubungkan Proxmox');
@@ -569,8 +571,26 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
 
                 {connectionType === 'proxmox' && (
                   <form onSubmit={handleProxmoxTokenSubmit} className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setProxmoxUrlMode('fullUrl')}
+                        className={`p-3 border text-left ${proxmoxUrlMode === 'fullUrl' ? 'bg-sky-500 text-white border-sky-400' : 'bg-sky-50/40 text-slate-700 border-sky-200'}`}
+                      >
+                        <span className="block font-bold uppercase text-[11px]">Full URL</span>
+                        <span className={`block text-[10px] mt-1 font-sans ${proxmoxUrlMode === 'fullUrl' ? 'text-sky-50' : 'text-slate-500'}`}>Untuk reverse proxy: https://server.kidut.online</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setProxmoxUrlMode('hostPort')}
+                        className={`p-3 border text-left ${proxmoxUrlMode === 'hostPort' ? 'bg-sky-500 text-white border-sky-400' : 'bg-sky-50/40 text-slate-700 border-sky-200'}`}
+                      >
+                        <span className="block font-bold uppercase text-[11px]">IP/DNS + Port</span>
+                        <span className={`block text-[10px] mt-1 font-sans ${proxmoxUrlMode === 'hostPort' ? 'text-sky-50' : 'text-slate-500'}`}>Default Proxmox: domain/IP + 8006</span>
+                      </button>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="md:col-span-2">
+                      <div className={proxmoxUrlMode === 'hostPort' ? 'md:col-span-2' : 'md:col-span-3'}>
                         <label className="block font-bold text-slate-700 mb-1">Proxmox API Token</label>
                         <input
                           type="password"
@@ -581,15 +601,17 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                           className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
                         />
                       </div>
-                      <div>
-                        <label className="block font-bold text-slate-700 mb-1">Port API</label>
-                        <input
-                          type="text"
-                          value={proxmoxPort}
-                          onChange={(e) => setProxmoxPort(e.target.value)}
-                          className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
-                        />
-                      </div>
+                      {proxmoxUrlMode === 'hostPort' && (
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Port API</label>
+                          <input
+                            type="text"
+                            value={proxmoxPort}
+                            onChange={(e) => setProxmoxPort(e.target.value)}
+                            className="w-full bg-sky-50/50 border border-sky-200 p-2.5 text-slate-900 focus:outline-none focus:border-sky-500"
+                          />
+                        </div>
+                      )}
                     </div>
                     <button
                       type="submit"

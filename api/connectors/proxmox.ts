@@ -1,6 +1,25 @@
-import { createHmac } from 'node:crypto';
-
 type Row = Record<string, any>;
+type ProxmoxUrlMode = 'hostPort' | 'fullUrl';
+
+type ProxmoxUrlInput = { urlMode?: ProxmoxUrlMode; host: string; port?: string };
+
+export const proxmoxBaseUrl = ({ urlMode = 'hostPort', host, port = '8006' }: ProxmoxUrlInput) => {
+  const rawHost = host.trim().replace(/\/$/, '');
+  if (!rawHost) throw new ApiError(400, 'Host Proxmox wajib diisi');
+  if (urlMode === 'fullUrl') {
+    const withScheme = /^https?:\/\//i.test(rawHost) ? rawHost : `https://${rawHost}`;
+    try {
+      const url = new URL(withScheme);
+      return url.href.replace(/\/$/, '');
+    } catch {
+      throw new ApiError(400, 'Full URL Proxmox tidak valid');
+    }
+  }
+
+  const cleaned = rawHost.replace(/^https?:\/\//i, '').split('/')[0];
+  const hasPort = /:\d+$/.test(cleaned);
+  return `https://${cleaned}${hasPort ? '' : `:${port || '8006'}`}`;
+};
 
 class ApiError extends Error {
   status: number;
@@ -45,11 +64,10 @@ const normalizeToken = (token: string) => {
 const proxmoxAuth = (token: string) => `PVEAPIToken=${token}`;
 
 // Fetch from Proxmox API with timeout
-const proxmoxFetch = async (host: string, port: string, token: string, path: string) => {
+const proxmoxFetch = async (base: string, token: string, path: string) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const base = `https://${host}:${port}`;
     const res = await fetch(`${base}${path}`, {
       headers: { Authorization: proxmoxAuth(token), Accept: 'application/json' },
       signal: controller.signal,
@@ -67,22 +85,22 @@ const proxmoxFetch = async (host: string, port: string, token: string, path: str
 };
 
 // Get Proxmox node status + VM/LXC metrics
-const collectProxmoxMetrics = async (host: string, port: string, token: string) => {
-  const version = await proxmoxFetch(host, port, token, '/api2/json/version');
-  const nodesRes = await proxmoxFetch(host, port, token, '/api2/json/nodes');
+const collectProxmoxMetrics = async (base: string, token: string) => {
+  const version = await proxmoxFetch(base, token, '/api2/json/version');
+  const nodesRes = await proxmoxFetch(base, token, '/api2/json/nodes');
   const nodes = Array.isArray(nodesRes.data) ? nodesRes.data : [];
   const nodeName = nodes[0]?.node;
   if (!nodeName) return { version: version?.data?.version || 'unknown', services: [], status: 'active', cpuUsage: 0, memoryUsage: 0, storageUsage: 0 };
 
-  const statusRes = await proxmoxFetch(host, port, token, `/api2/json/nodes/${nodeName}/status`);
+  const statusRes = await proxmoxFetch(base, token, `/api2/json/nodes/${nodeName}/status`);
   const status = statusRes?.data || {};
   const cpuUsage = Number(status.cpu ?? 0) * 100;
   const memoryUsage = status.memory && status.memory.total ? (status.memory.used / status.memory.total) * 100 : 0;
   const storageUsage = status.rootfs && status.rootfs.total ? (status.rootfs.used / status.rootfs.total) * 100 : 0;
 
-  const qemuRes = await proxmoxFetch(host, port, token, `/api2/json/nodes/${nodeName}/qemu`);
+  const qemuRes = await proxmoxFetch(base, token, `/api2/json/nodes/${nodeName}/qemu`);
   const qemu = Array.isArray(qemuRes?.data) ? qemuRes.data : [];
-  const lxcRes = await proxmoxFetch(host, port, token, `/api2/json/nodes/${nodeName}/lxc`);
+  const lxcRes = await proxmoxFetch(base, token, `/api2/json/nodes/${nodeName}/lxc`);
   const lxc = Array.isArray(lxcRes?.data) ? lxcRes.data : [];
   const services = [
     ...qemu.map((vm: Row) => ({
@@ -153,16 +171,19 @@ export default async function handler(req: any, res: any) {
       const token = String(body.token || '').trim();
       const host = String(body.host || '').trim();
       const port = String(body.port || '8006').trim();
+      const urlMode = (body.urlMode === 'fullUrl' ? 'fullUrl' : 'hostPort') as ProxmoxUrlMode;
       if (!serverId) throw new ApiError(400, 'serverId wajib diisi');
       const normalized = normalizeToken(token);
+      const apiBaseUrl = proxmoxBaseUrl({ urlMode, host, port });
 
       // Test connection first
-      const metrics = await collectProxmoxMetrics(host || 'localhost', port, normalized);
+      const metrics = await collectProxmoxMetrics(apiBaseUrl, normalized);
 
       const patched = await patchServer(serverId, {
         proxmox_token: normalized,
         proxmox_host: host,
         proxmox_port: port,
+        proxmox_url_mode: urlMode,
         status: 'active',
         connection_status: `Proxmox connected · ${metrics.nodeName || 'node'} · PVE ${metrics.version}`,
         cpu_usage: metrics.cpuUsage,

@@ -28,6 +28,7 @@ create table if not exists servers (
 alter table servers add column if not exists proxmox_token text;
 alter table servers add column if not exists proxmox_host text;
 alter table servers add column if not exists proxmox_port text default '8006';
+alter table servers add column if not exists proxmox_url_mode text default 'hostPort';
 
 create table if not exists alerts (
   id text primary key,
