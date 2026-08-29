@@ -85,7 +85,7 @@ const proxmoxFetch = async (base: string, token: string, path: string) => {
 };
 
 // Get Proxmox node status + VM/LXC metrics
-const collectProxmoxMetrics = async (base: string, token: string) => {
+export const collectProxmoxMetrics = async (base: string, token: string) => {
   const version = await proxmoxFetch(base, token, '/api2/json/version');
   const nodesRes = await proxmoxFetch(base, token, '/api2/json/nodes');
   const nodes = Array.isArray(nodesRes.data) ? nodesRes.data : [];

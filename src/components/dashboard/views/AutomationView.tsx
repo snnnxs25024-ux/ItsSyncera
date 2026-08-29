@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Play, RefreshCw, PauseCircle, Clock, ShieldAlert, Activity, ListChecks, History, Lock, Gauge, Server, AlertTriangle } from 'lucide-react';
-import { AutomationItem, AutomationRule, AutomationRun } from '../../../types/dashboard';
+import { AutomationItem, AutomationRule, AutomationRun, ServerItem } from '../../../types/dashboard';
 
 interface AutomationViewProps {
   automations: AutomationItem[];
   automationRules: AutomationRule[];
   automationRuns: AutomationRun[];
+  servers: ServerItem[];
+  onRefreshData?: () => void;
 }
 
 type AutomationFilter = 'all' | 'active' | 'paused' | 'running';
@@ -53,16 +55,18 @@ const defaultRules: AutomationRule[] = [
   { id: 'default-ssl-expiry', name: 'SSL Expiry Watch', metric: 'ssl', condition: '<', threshold: '14 days', action: 'Create warning alert', severity: 'warning', approvalRequired: false, status: 'active', updatedAt: 'Default policy' },
 ];
 
-export const AutomationView: React.FC<AutomationViewProps> = ({ automations, automationRules, automationRuns }) => {
+export const AutomationView: React.FC<AutomationViewProps> = ({ automations, automationRules, automationRuns, servers, onRefreshData }) => {
   const [selectedFilter, setSelectedFilter] = useState<AutomationFilter>('all');
   const [runs, setRuns] = useState<AutomationRun[]>(automationRuns);
   const [runningId, setRunningId] = useState<string | null>(null);
+  const [proxmoxRunningId, setProxmoxRunningId] = useState<string | null>(null);
   const [message, setMessage] = useState<string>('');
   const filteredAutomations = automations.filter((automation) => matchesFilter(automation, selectedFilter));
   const activeCount = automations.filter((automation) => automation.status === 'active').length;
   const pausedCount = automations.filter((automation) => automation.status === 'paused').length;
   const runningCount = automations.filter((automation) => automation.status === 'running').length;
   const totalRuns = automations.reduce((acc, automation) => acc + Number(automation.historyCount || 0), 0) + runs.length;
+  const proxmoxServers = servers.filter((server) => server.connectionType === 'proxmox' && server.status === 'active');
   const visibleRules = automationRules.length ? automationRules : defaultRules;
   const filters: { id: AutomationFilter; label: string }[] = [
     { id: 'all', label: 'All' },
@@ -90,6 +94,27 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
       setMessage(err instanceof Error ? err.message : 'Run automation gagal');
     } finally {
       setRunningId(null);
+    }
+  };
+
+  const runProxmoxHealth = async (serverId: string) => {
+    setProxmoxRunningId(serverId);
+    setMessage('');
+    try {
+      const res = await fetch('/api/automation/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'proxmox_health_check', serverId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+      setRuns((current) => [data.run, ...current].slice(0, 50));
+      setMessage(data.run.message || `Proxmox health check selesai: ${data.run.status}`);
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Proxmox automation gagal');
+    } finally {
+      setProxmoxRunningId(null);
     }
   };
 
@@ -124,6 +149,62 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
             <span className={`text-3xl font-mono font-bold ${String(color)}`}>{Number(value).toLocaleString('id-ID')}</span>
           </div>
         ))}
+      </div>
+
+      <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div>
+            <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-sky-600" />
+              <span>Proxmox Safe Automation</span>
+            </h2>
+            <p className="text-xs text-slate-500 font-sans mt-1">Read-only: health check, sync VM/CT status, update metrics, write run log.</p>
+          </div>
+          <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] uppercase font-bold">{proxmoxServers.length} server connected</span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {['Health Check Proxmox', 'Sync VM/CT Status', 'Update Dashboard Metrics'].map((item) => (
+            <div key={item} className="border border-sky-100 bg-sky-50/20 p-3 flex items-center gap-2 font-mono text-xs text-slate-700">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+        {proxmoxServers.length ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {proxmoxServers.map((server) => (
+              <article key={server.id} className="border border-sky-100 bg-sky-50/20 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-mono text-sm font-bold uppercase text-slate-900 truncate">{server.name}</h3>
+                    <p className="font-mono text-[11px] text-slate-500 mt-1 truncate">{server.ipAddress}</p>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase font-mono text-[10px] font-bold">ready</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[11px] font-mono">
+                  <div className="bg-white border border-sky-100 p-2"><span className="block text-slate-500">CPU</span><b>{server.cpuUsage}%</b></div>
+                  <div className="bg-white border border-sky-100 p-2"><span className="block text-slate-500">RAM</span><b>{server.memoryUsage}%</b></div>
+                  <div className="bg-white border border-sky-100 p-2"><span className="block text-slate-500">Disk</span><b>{server.storageUsage}%</b></div>
+                </div>
+                <button
+                  type="button"
+                  disabled={proxmoxRunningId === server.id}
+                  onClick={() => runProxmoxHealth(server.id)}
+                  className="w-full px-4 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 disabled:text-slate-500 text-white font-mono text-xs uppercase font-bold border border-sky-400 shadow-xs flex items-center justify-center space-x-2"
+                >
+                  {proxmoxRunningId === server.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  <span>{proxmoxRunningId === server.id ? 'Running Health Check' : 'Run Health Check Now'}</span>
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="border border-dashed border-sky-200 bg-sky-50/30 p-6 text-center">
+            <Server className="w-7 h-7 text-sky-600 mx-auto mb-2" />
+            <p className="font-mono text-sm font-bold text-slate-900 uppercase">Belum ada Proxmox connected</p>
+            <p className="text-xs text-slate-500 font-sans mt-1">Connect Proxmox dulu di menu Servers, lalu automation ini aktif.</p>
+          </div>
+        )}
       </div>
 
       <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">

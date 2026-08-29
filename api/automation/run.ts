@@ -1,3 +1,6 @@
+import { collectProxmoxMetrics } from '../connectors/proxmox';
+import { findProxmoxServer, proxmoxAutomationMessage, proxmoxServerBase } from './proxmox';
+
 type Row = Record<string, any>;
 
 type RunStatus = 'success' | 'failed' | 'running' | 'blocked';
@@ -91,18 +94,7 @@ const executeAutomation = async (automation: Row): Promise<{ status: RunStatus; 
   return { status: 'blocked', targetServer: '-', message: `${type} needs approval/connector. No server action executed.` };
 };
 
-const insertRun = async (automation: Row, result: { status: RunStatus; message: string; targetServer: string }) => {
-  const stamp = nowIso();
-  const row = {
-    id: `run-${String(automation.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
-    automation_id: String(automation.id),
-    automation_name: automation.name ?? 'Untitled automation',
-    target_server: result.targetServer,
-    status: result.status,
-    started_at: stamp,
-    finished_at: stamp,
-    message: result.message,
-  };
+const insertRunRow = async (row: Row) => {
   const res = await fetch(`${baseUrl}/rest/v1/automation_runs`, {
     method: 'POST',
     headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
@@ -111,6 +103,20 @@ const insertRun = async (automation: Row, result: { status: RunStatus; message: 
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `automation_runs insert: ${res.status} ${body.slice(0, 160)}`.trim());
   return mapRun(JSON.parse(body || '[]')[0] ?? row);
+};
+
+const insertRun = async (automation: Row, result: { status: RunStatus; message: string; targetServer: string }) => {
+  const stamp = nowIso();
+  return insertRunRow({
+    id: `run-${String(automation.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    automation_id: String(automation.id),
+    automation_name: automation.name ?? 'Untitled automation',
+    target_server: result.targetServer,
+    status: result.status,
+    started_at: stamp,
+    finished_at: stamp,
+    message: result.message,
+  });
 };
 
 const updateAutomation = async (automation: Row) => {
@@ -131,6 +137,62 @@ const updateAutomation = async (automation: Row) => {
   if (!res.ok) throw new ApiError(502, `automations update: ${res.status} ${body.slice(0, 160)}`.trim());
 };
 
+const patchServerHealth = async (server: Row, metrics: Row) => {
+  const res = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(String(server.id))}`, {
+    method: 'PATCH',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify({
+      status: 'active',
+      connection_status: `Proxmox automation health OK · ${metrics.nodeName || 'node'} · PVE ${metrics.version || '?'}`,
+      cpu_usage: metrics.cpuUsage ?? 0,
+      memory_usage: metrics.memoryUsage ?? 0,
+      storage_usage: metrics.storageUsage ?? 0,
+      services: metrics.services || [],
+      last_seen: nowLabel(),
+      last_check: nowLabel(),
+      updated_at: nowIso(),
+    }),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(502, `servers update: ${res.status} ${body.slice(0, 160)}`.trim());
+};
+
+const insertMetricSnapshot = async (server: Row, metrics: Row) => {
+  const row = {
+    id: `snap-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    server_id: String(server.id),
+    server_name: server.name || 'Proxmox server',
+    cpu_usage: metrics.cpuUsage ?? 0,
+    memory_usage: metrics.memoryUsage ?? 0,
+    storage_usage: metrics.storageUsage ?? 0,
+    network_traffic: '-',
+  };
+  const res = await fetch(`${baseUrl}/rest/v1/metric_snapshots`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify(row),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(502, `metric_snapshots insert: ${res.status} ${body.slice(0, 160)}`.trim());
+};
+
+const executeProxmoxHealth = async (serverId?: string) => {
+  const server = findProxmoxServer(await readOptionalTable('servers'), serverId);
+  const metrics = await collectProxmoxMetrics(proxmoxServerBase(server), String(server.proxmox_token));
+  await patchServerHealth(server, metrics);
+  await insertMetricSnapshot(server, metrics);
+  return insertRunRow({
+    id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    automation_id: null,
+    automation_name: 'Proxmox Health Check',
+    target_server: server.name || 'Proxmox server',
+    status: 'success',
+    started_at: nowIso(),
+    finished_at: nowIso(),
+    message: proxmoxAutomationMessage(server.name || 'Proxmox server', metrics),
+  });
+};
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method === 'GET') {
@@ -142,8 +204,14 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'POST') {
+      const body = bodyOf(req);
+      if (body.type === 'proxmox_health_check') {
+        const run = await executeProxmoxHealth(body.serverId ? String(body.serverId) : undefined);
+        return res.status(200).json({ success: true, run });
+      }
+
       const automations = await readTable('automations');
-      const automation = selectAutomation(automations, bodyOf(req).automationId);
+      const automation = selectAutomation(automations, body.automationId);
       if (!automation) throw new ApiError(404, 'Automation not found');
       const result = await executeAutomation(automation);
       const run = await insertRun(automation, result);

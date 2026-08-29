@@ -256,7 +256,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           )}
           {currentTab === 'monitoring' && <MonitoringView servers={servers} metricSnapshots={metricSnapshots} />}
           {currentTab === 'alerts' && <AlertsView alerts={alerts} />}
-          {currentTab === 'automation' && <AutomationView automations={automations} automationRules={automationRules} automationRuns={automationRuns} />}
+          {currentTab === 'automation' && <AutomationView automations={automations} automationRules={automationRules} automationRuns={automationRuns} servers={servers} onRefreshData={onRefreshData} />}
           {currentTab === 'maintenance' && <MaintenanceView maintenances={maintenances} />}
           {currentTab === 'backup' && <BackupView backups={backups} />}
           {currentTab === 'reports' && <ReportsView servers={servers} alerts={alerts} automations={automations} automationRuns={automationRuns} maintenances={maintenances} backups={backups} />}
