@@ -10,6 +10,13 @@ const supabaseUrl = () => (process.env.SUPABASE_URL || process.env.VITE_SUPABASE
 const anonKey = () => process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const clean = (value: unknown, max = 160) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 const bodyOf = (req: any) => typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+const appUrl = (req: any) => {
+  const host = req.headers?.['x-forwarded-host'] || req.headers?.host;
+  if (host) return `${req.headers?.['x-forwarded-proto'] || 'https'}://${host}`.replace(/\/$/, '');
+  if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL.replace(/\/$/, '');
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'https://its-syncera.vercel.app';
+};
 const send = (res: any, status: number, payload: unknown) => res.status(status).json(payload);
 const headers = () => {
   const key = anonKey();
@@ -49,7 +56,7 @@ export default async function handler(req: any, res: any) {
       throw new ApiError(405, 'Method not allowed');
     }
     const input = validate(bodyOf(req));
-    const data = await readJson(await fetch(`${supabaseUrl()}/auth/v1/signup`, {
+    const data = await readJson(await fetch(`${supabaseUrl()}/auth/v1/signup?redirect_to=${encodeURIComponent(appUrl(req))}`, {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({

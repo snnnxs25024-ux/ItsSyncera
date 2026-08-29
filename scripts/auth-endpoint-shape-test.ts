@@ -29,4 +29,31 @@ await me({ method: 'GET', headers: {} }, r);
 assert.equal(r.code, 200);
 assert.equal(r.body.user, null);
 
+const originalFetch = globalThis.fetch;
+let signupUrl = '';
+process.env.VITE_SUPABASE_ANON_KEY = 'anon-test';
+(globalThis as any).fetch = async (url: URL | string) => {
+  signupUrl = String(url);
+  return new Response(JSON.stringify({ user: { id: 'user-1' } }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+r = res();
+await signup({
+  method: 'POST',
+  body: {
+    fullName: 'Sunan Iskandar',
+    email: 'sunan.iskandar36@gmail.com',
+    phone: '085890285218',
+    companyName: 'Its Syncera',
+    companyAddress: 'Jakarta',
+    companyPhone: '085890285218',
+    password: 'test123',
+  },
+}, r);
+(globalThis as any).fetch = originalFetch;
+assert.equal(r.code, 201);
+assert.match(signupUrl, /\/auth\/v1\/signup\?redirect_to=https%3A%2F%2Fits-syncera\.vercel\.app$/);
+
 console.log('auth endpoint shape ok');
