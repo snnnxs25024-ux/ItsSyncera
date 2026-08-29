@@ -209,14 +209,59 @@ const bodyOf = (req: any) => {
   return req.body;
 };
 
+const patchServer = async (id: string, patch: Row) => {
+  const out = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+    body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
+  });
+  const text = await out.text();
+  if (!out.ok) throw new ApiError(out.status, text || `patch failed: ${out.status}`);
+  return JSON.parse(text || '[]')[0] as Row | undefined;
+};
+
+const deleteServerRows = async (id: string) => {
+  const out = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: headers({ Prefer: 'return=representation' }),
+  });
+  const text = await out.text();
+  if (!out.ok) throw new ApiError(out.status, text || `delete failed: ${out.status}`);
+  return JSON.parse(text || '[]') as Row[];
+};
+
 export default async function handler(req: any, res: any) {
   try {
     if (req.method === 'GET') return res.status(200).json({ success: true, servers: (await readTable('servers')).map(mapServer) });
+
+    if (req.method === 'PATCH') {
+      const id = String(req.query?.id || bodyOf(req).id || '').trim();
+      if (!id) throw new ApiError(400, 'id server wajib diisi');
+      const body = bodyOf(req);
+      const allowed = ['name', 'os', 'ip_address', 'provider', 'location', 'ssh_port', 'status', 'connection_type'];
+      const patch: Row = {};
+      for (const key of allowed) {
+        if (key in body) patch[key] = body[key];
+      }
+      if (!Object.keys(patch).length) throw new ApiError(400, 'Tidak ada field yang bisa diubah');
+      const updated = await patchServer(id, patch);
+      if (!updated) throw new ApiError(404, 'Server tidak ditemukan');
+      return res.status(200).json({ success: true, server: mapServer(updated) });
+    }
+
+    if (req.method === 'DELETE') {
+      const id = String(req.query?.id || '').trim();
+      if (!id) throw new ApiError(400, 'id server wajib diisi');
+      const deleted = await deleteServerRows(id);
+      if (!deleted.length) throw new ApiError(404, 'Server tidak ditemukan');
+      return res.status(200).json({ success: true, deleted: deleted.map(mapServer) });
+    }
+
     if (req.method === 'POST') {
       const out = await createServerRecord(bodyOf(req), req);
       return res.status(201).json({ success: true, ...out });
     }
-    res.setHeader('Allow', 'GET, POST');
+    res.setHeader('Allow', 'GET, POST, PATCH, DELETE');
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   } catch (err) {
     return res.status(err instanceof ApiError ? err.status : 500).json({ success: false, error: err instanceof Error ? err.message : 'servers request failed' });

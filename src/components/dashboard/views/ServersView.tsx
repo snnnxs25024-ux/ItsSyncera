@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Server, ArrowLeft, ShieldCheck, Activity, Cpu, HardDrive, Wifi, CheckCircle2, AlertTriangle, RefreshCw, Plus, Terminal, Copy, Check, KeyRound, Cloud, PlugZap } from 'lucide-react';
+import { Server, ArrowLeft, ShieldCheck, Activity, Cpu, HardDrive, Wifi, CheckCircle2, AlertTriangle, RefreshCw, Plus, Terminal, Copy, Check, KeyRound, Cloud, PlugZap, Trash2 } from 'lucide-react';
 import { ServerItem } from '../../../types/dashboard';
 
 interface ServersViewProps {
@@ -46,6 +46,24 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
   const [proxmoxPort, setProxmoxPort] = useState('8006');
   const [proxmoxStatus, setProxmoxStatus] = useState<'idle' | 'connecting' | 'ok' | 'error'>('idle');
   const [proxmoxResult, setProxmoxResult] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+
+  const handleDeleteServer = async (serverId: string, serverName: string) => {
+    if (!window.confirm(`Hapus server "${serverName}"? Tindakan ini permanen.`)) return;
+    setDeletingId(serverId);
+    setDeleteError('');
+    try {
+      const res = await fetch(`/api/servers?id=${encodeURIComponent(serverId)}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || `Gagal menghapus (${res.status})`);
+      if (onRefreshServers) onRefreshServers();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Gagal menghapus server.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const allServers = servers;
   const filteredServers = allServers.filter(s => {
@@ -588,6 +606,12 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
         </div>
       )}
 
+      {deleteError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 font-mono text-xs">
+          {deleteError}
+        </div>
+      )}
+
       {/* Servers Table */}
       <div className="bg-white border border-sky-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
@@ -633,6 +657,15 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                       className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white font-mono uppercase text-[10px] border border-sky-400 font-bold shadow-xs"
                     >
                       View Detail
+                    </button>
+                    <button
+                      onClick={() => handleDeleteServer(srv.id, srv.name)}
+                      disabled={deletingId === srv.id}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-mono uppercase text-[10px] border border-rose-200 font-bold shadow-xs inline-flex items-center space-x-1"
+                      title="Hapus server"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>{deletingId === srv.id ? '...' : 'Hapus'}</span>
                     </button>
                   </td>
                 </tr>

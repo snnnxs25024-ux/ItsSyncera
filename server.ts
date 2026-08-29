@@ -36,6 +36,8 @@ async function startServer() {
   app.post("/api/agent/heartbeat", runHandler(handlerAgentHeartbeat));
   app.get("/api/servers", runHandler(handlerServers));
   app.post("/api/servers", runHandler(handlerServers));
+  app.patch("/api/servers", runHandler(handlerServers));
+  app.delete("/api/servers", runHandler(handlerServers));
   app.get("/api/settings/status", runHandler(handlerSettingsStatus));
   app.get("/api/connectors/proxmox", runHandler(handlerConnectorProxmox));
   app.post("/api/connectors/proxmox", runHandler(handlerConnectorProxmox));
