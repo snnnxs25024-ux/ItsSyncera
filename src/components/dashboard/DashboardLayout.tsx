@@ -100,7 +100,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Brand */}
         <div className="p-5 border-b border-sky-900/40">
           <div className="bg-white border border-sky-200 p-2 inline-flex max-w-full overflow-hidden">
-            <BrandLogo className="h-16 w-auto max-w-[220px]" />
+            <BrandLogo asset="mark" className="h-16 w-auto max-w-[200px]" />
           </div>
           <span className="font-mono text-[9px] text-sky-400 tracking-widest uppercase block mt-2">Enterprise Cloud</span>
         </div>
@@ -199,7 +199,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {mobileSidebarOpen && (
           <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 flex flex-col p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-sky-800 pb-4">
-              <span className="bg-white border border-sky-200 p-1 inline-flex"><BrandLogo className="h-14 w-auto max-w-[210px]" /></span>
+              <span className="bg-white border border-sky-200 p-1 inline-flex"><BrandLogo asset="mark" className="h-14 w-auto max-w-[180px]" /></span>
               <button onClick={() => setMobileSidebarOpen(false)} className="text-white p-1">
                 <X className="w-6 h-6" />
               </button>

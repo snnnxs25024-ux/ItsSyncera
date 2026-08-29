@@ -24,7 +24,7 @@ const appUrl = (req: any) => {
   if (host) return `${proto}://${host}`;
   if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL.replace(/\/$/, '');
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'https://its-syncera.vercel.app';
+  return 'https://sync.ipt.solutions';
 };
 
 const checkSupabase = async () => {

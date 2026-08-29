@@ -89,7 +89,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, initialMode, onClo
 
         <div className="flex items-center space-x-3 mb-5 pr-8">
           <div className="shrink-0 bg-white flex items-center justify-center rounded-none border border-sky-200 shadow-xs px-2 py-1">
-            <BrandLogo className="h-10 w-auto max-w-[112px]" />
+            <BrandLogo asset="mark" className="h-12 w-auto max-w-[128px]" />
           </div>
           <div>
             <span className="font-mono text-base font-bold uppercase tracking-wider block leading-none text-slate-900">

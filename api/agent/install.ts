@@ -85,7 +85,7 @@ const buildScript = (origin: string) => [
 
 export default function handler(req: any, res: any) {
   const proto = String(req.headers?.['x-forwarded-proto'] || 'https').split(',')[0];
-  const host = req.headers?.host || 'its-syncera.vercel.app';
+  const host = req.headers?.host || 'sync.ipt.solutions';
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.status(200).send(buildScript(`${proto}://${host}`));
 }

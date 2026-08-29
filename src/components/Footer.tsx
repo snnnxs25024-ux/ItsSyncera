@@ -9,7 +9,7 @@ export const Footer: React.FC = () => {
           
           <div className="space-y-4">
             <div className="bg-white border border-sky-200 p-2 inline-flex">
-              <BrandLogo className="h-20 w-auto max-w-[280px]" />
+              <BrandLogo asset="mark" className="h-20 w-auto max-w-[240px]" />
             </div>
             <p className="text-slate-400 font-sans text-sm leading-relaxed">
               Platform Server Monitoring, Maintenance, dan Automation Infrastructure Management berstandar enterprise.

@@ -54,6 +54,6 @@ await signup({
 }, r);
 (globalThis as any).fetch = originalFetch;
 assert.equal(r.code, 201);
-assert.match(signupUrl, /\/auth\/v1\/signup\?redirect_to=https%3A%2F%2Fits-syncera\.vercel\.app$/);
+assert.match(signupUrl, /\/auth\/v1\/signup\?redirect_to=https%3A%2F%2Fsync\.ipt\.solutions$/);
 
 console.log('auth endpoint shape ok');

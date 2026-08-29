@@ -23,7 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
           onClick={() => handleNavClick('hero')} 
           className="flex items-center space-x-3 cursor-pointer group"
         >
-          <BrandLogo className="h-20 w-auto max-w-[260px]" />
+          <BrandLogo asset="wordmark" className="h-24 w-auto max-w-[320px]" />
         </div>
 
         {/* Desktop Navigation */}
