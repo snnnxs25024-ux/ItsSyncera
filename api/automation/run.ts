@@ -1,6 +1,3 @@
-import { collectProxmoxMetrics } from '../connectors/proxmox';
-import { findProxmoxServer, proxmoxAutomationMessage, proxmoxServerBase } from '../../src/lib/proxmoxAutomation';
-
 type Row = Record<string, any>;
 
 type RunStatus = 'success' | 'failed' | 'running' | 'blocked';
@@ -176,9 +173,62 @@ const insertMetricSnapshot = async (server: Row, metrics: Row) => {
   if (!res.ok) throw new ApiError(502, `metric_snapshots insert: ${res.status} ${body.slice(0, 160)}`.trim());
 };
 
+const proxmoxBaseUrl = (server: Row) => {
+  const host = String(server.proxmox_host || server.ip_address || server.ipAddress || '').trim().replace(/\/$/, '');
+  if (!host) throw new ApiError(400, 'Host Proxmox wajib diisi');
+  if (server.proxmox_url_mode === 'fullUrl') return (/^https?:\/\//i.test(host) ? host : `https://${host}`).replace(/\/$/, '');
+  const cleaned = host.replace(/^https?:\/\//i, '').split('/')[0];
+  return `https://${cleaned}${/:\d+$/.test(cleaned) ? '' : `:${server.proxmox_port || '8006'}`}`;
+};
+
+const findProxmoxServer = (servers: Row[], serverId?: string) => {
+  const server = (serverId ? servers.filter((item) => String(item.id) === serverId) : servers).find((item) => item.connection_type === 'proxmox');
+  if (!server) throw new ApiError(404, 'Server Proxmox tidak ditemukan');
+  if (!String(server.proxmox_token || '').trim()) throw new ApiError(400, 'Server Proxmox belum punya token. Connect Proxmox dulu di menu Servers.');
+  return server;
+};
+
+const proxmoxFetch = async (base: string, token: string, path: string) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`${base}${path}`, { headers: { Authorization: `PVEAPIToken=${token}`, Accept: 'application/json' }, signal: controller.signal });
+    if (!res.ok) throw new ApiError(res.status, `Proxmox API ${res.status}`);
+    return JSON.parse(await res.text() || '{}');
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError(502, `Tidak dapat terhubung ke Proxmox: ${err instanceof Error ? err.message : 'unknown'}`);
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const collectProxmoxMetrics = async (base: string, token: string) => {
+  const version = await proxmoxFetch(base, token, '/api2/json/version');
+  const nodesRes = await proxmoxFetch(base, token, '/api2/json/nodes');
+  const nodeName = Array.isArray(nodesRes.data) ? nodesRes.data[0]?.node : '';
+  if (!nodeName) return { version: version?.data?.version || 'unknown', nodeName: 'node', services: [], cpuUsage: 0, memoryUsage: 0, storageUsage: 0 };
+  const statusRes = await proxmoxFetch(base, token, `/api2/json/nodes/${nodeName}/status`);
+  const status = statusRes?.data || {};
+  const qemu = (await proxmoxFetch(base, token, `/api2/json/nodes/${nodeName}/qemu`))?.data || [];
+  const lxc = (await proxmoxFetch(base, token, `/api2/json/nodes/${nodeName}/lxc`))?.data || [];
+  const services = [...qemu, ...lxc].map((item: Row) => ({ name: `${item.type === 'lxc' ? 'CT' : 'VM'} ${item.vmid} · ${item.name || 'unnamed'}`, status: item.status === 'running' ? 'online' : 'offline', response: item.status || 'unknown' })).slice(0, 12);
+  return {
+    version: version?.data?.version || 'unknown',
+    nodeName,
+    cpuUsage: Math.round(Number(status.cpu ?? 0) * 1000) / 10,
+    memoryUsage: status.memory?.total ? Math.round((status.memory.used / status.memory.total) * 1000) / 10 : 0,
+    storageUsage: status.rootfs?.total ? Math.round((status.rootfs.used / status.rootfs.total) * 1000) / 10 : 0,
+    services,
+  };
+};
+
+const proxmoxAutomationMessage = (serverName: string, metrics: Row) =>
+  `Proxmox health OK: ${serverName} · node ${metrics.nodeName || 'node'} · PVE ${metrics.version || '?'} · VM/CT ${(metrics.services || []).length} · CPU ${metrics.cpuUsage ?? 0}% · RAM ${metrics.memoryUsage ?? 0}% · Disk ${metrics.storageUsage ?? 0}%`;
+
 const executeProxmoxHealth = async (serverId?: string) => {
   const server = findProxmoxServer(await readOptionalTable('servers'), serverId);
-  const metrics = await collectProxmoxMetrics(proxmoxServerBase(server), String(server.proxmox_token));
+  const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
   await patchServerHealth(server, metrics);
   await insertMetricSnapshot(server, metrics);
   return insertRunRow({

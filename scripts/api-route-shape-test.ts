@@ -14,6 +14,8 @@ const walk = (dir: string) => {
 walk(apiDir);
 for (const route of routes) {
   const source = fs.readFileSync(route, 'utf8');
-  assert.match(source, /export\s+default\s+async\s+function\s+handler|export\s+default\s+function\s+handler|export\s+default\s+handler/, `${path.relative('.', route)} must export default handler`);
+  const label = path.relative('.', route);
+  assert.match(source, /export\s+default\s+async\s+function\s+handler|export\s+default\s+function\s+handler|export\s+default\s+handler/, `${label} must export default handler`);
+  assert.doesNotMatch(source, /^import\s+.*from\s+['"]\.\.?\//m, `${label} must not use relative imports; Vercel API bundling has failed on shared helpers before`);
 }
 console.log('api route shape ok');
