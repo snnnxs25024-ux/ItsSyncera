@@ -246,6 +246,39 @@ const executeProxmoxHealth = async (serverId?: string) => {
 export default async function handler(req: any, res: any) {
   try {
     if (req.method === 'GET') {
+      // Vercel cron: run Proxmox health check on all connected servers automatically
+      if (String(req.headers?.['x-vercel-cron'] || '').trim() || String(req.headers?.['x-vercel-cron-secret'] || '').trim()) {
+        const results: Row[] = [];
+        for (const server of (await readOptionalTable('servers')).filter((item) => item.connection_type === 'proxmox' && String(item.proxmox_token || '').trim())) {
+          try {
+            const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
+            await patchServerHealth(server, metrics);
+            await insertMetricSnapshot(server, metrics);
+            results.push(await insertRunRow({
+              id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+              automation_id: null,
+              automation_name: 'Proxmox Auto Health Check',
+              target_server: server.name || 'Proxmox server',
+              status: 'success',
+              started_at: nowIso(),
+              finished_at: nowIso(),
+              message: proxmoxAutomationMessage(server.name || 'Proxmox server', metrics),
+            }));
+          } catch (err) {
+            results.push({
+              id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+              automation_id: null,
+              automation_name: 'Proxmox Auto Health Check',
+              target_server: server.name || 'Proxmox server',
+              status: 'failed',
+              started_at: nowIso(),
+              finished_at: nowIso(),
+              message: `Proxmox health gagal: ${err instanceof Error ? err.message : 'error'}`,
+            } as Row);
+          }
+        }
+        return res.status(200).json({ success: true, cron: true, checkedAt: nowIso(), results });
+      }
       const runs = (await readOptionalTable('automation_runs'))
         .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')))
         .slice(0, 50)

@@ -208,7 +208,34 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
       </div>
 
       <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+          <div>
+            <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-sky-600" />
+              <span>Scheduled Auto Health Check</span>
+            </h2>
+            <p className="text-xs text-slate-500 font-sans mt-1">Berjalan otomatis via Vercel Cron tanpa perlu klik manual.</p>
+          </div>
+          <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] uppercase font-bold">30 menit</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          {[
+            ['Interval', 'Setiap 30 menit'],
+            ['Trigger', 'Vercel Cron → /api/automation/run'],
+            ['Aksi', 'Health check + sync VM/CT + update metrics + snapshot'],
+            ['Scope', `Semua Proxmox connected (${proxmoxServers.length})`],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="bg-sky-50/20 border border-sky-100 p-3">
+              <span className="font-mono text-[10px] uppercase text-slate-500 block">{String(label)}</span>
+              <p className="font-sans text-slate-700 mt-1 font-bold">{String(value)}</p>
+            </div>
+          ))}
+        </div>
+        <p className="font-mono text-[11px] text-slate-500">Jadwal cron terdaftar di <code className="bg-sky-50 px-1">vercel.json</code> <span className="font-mono">*/30 * * * *</span>. Hasil tiap run tercatat di Run History di bawah.</p>
+      </div>
+
+      <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
           <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
             <Gauge className="w-4 h-4 text-sky-600" />
             <span>Automation Rules</span>
