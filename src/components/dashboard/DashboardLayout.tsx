@@ -101,7 +101,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Brand */}
         <div className={`p-3 border-b border-sky-100 ${desktopSidebarOpen ? '' : 'flex justify-center'}`}>
           <div className="inline-flex max-w-full overflow-hidden items-center">
-            <BrandLogo asset="mark" className="h-8 w-auto max-w-[56px]" />
+            <BrandLogo asset="sidebar" className="h-8 w-auto max-w-[56px]" />
           </div>
         </div>
 
@@ -206,7 +206,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {mobileSidebarOpen && (
           <div className="lg:hidden fixed inset-0 z-50 bg-white flex flex-col p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-sky-100 pb-4">
-              <span className="inline-flex"><BrandLogo asset="mark" className="h-10 w-auto max-w-[96px]" /></span>
+              <span className="inline-flex"><BrandLogo asset="sidebar" className="h-10 w-auto max-w-[96px]" /></span>
               <button onClick={() => setMobileSidebarOpen(false)} className="text-slate-700 p-1">
                 <X className="w-6 h-6" />
               </button>

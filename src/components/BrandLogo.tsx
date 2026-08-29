@@ -3,12 +3,13 @@ import React from 'react';
 type BrandLogoProps = {
   className?: string;
   variant?: 'light' | 'dark';
-  asset?: 'wordmark' | 'mark';
+  asset?: 'wordmark' | 'mark' | 'sidebar';
 };
 
 const logos = {
   wordmark: 'https://i.imgur.com/amfHJpU.png',
   mark: 'https://i.imgur.com/2SyGEWZ.png',
+  sidebar: 'https://i.imgur.com/UfgLBO8.png',
 };
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({ className = 'h-10 w-auto', variant = 'light', asset = 'mark' }) => (
