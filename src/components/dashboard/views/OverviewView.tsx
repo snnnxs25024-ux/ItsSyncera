@@ -46,9 +46,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
   const riskAlerts = activeAlerts.slice(0, 3);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* Top Welcome Banner */}
-      <div className="bg-sky-500 text-white p-6 rounded-none border border-sky-400 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-sky-500 text-white p-4 rounded-none border border-sky-400 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <span className="font-mono text-[10px] uppercase tracking-widest bg-sky-600 px-2 py-1 text-white font-semibold inline-block mb-2">
             Enterprise Client Portal • It's Syncera
@@ -77,8 +77,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
       </div>
 
       {/* Decision Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className={`border p-5 shadow-xs text-white ${overallTone}`}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className={`border p-4 shadow-xs text-white ${overallTone}`}>
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] uppercase tracking-widest font-semibold opacity-90">Overall Status</span>
             <ShieldCheck className="w-5 h-5" />
@@ -89,7 +89,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           </p>
         </div>
 
-        <div className="bg-white border border-sky-200 p-5 shadow-xs">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Uptime Node</span>
             <Activity className="w-5 h-5 text-emerald-600" />
@@ -98,7 +98,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           <p className="text-[11px] text-slate-500 font-sans mt-2">Uptime node dari Proxmox API.</p>
         </div>
 
-        <div className="bg-white border border-sky-200 p-5 shadow-xs">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Last Updated</span>
             <TimerReset className="w-5 h-5 text-sky-600" />
@@ -109,8 +109,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
       </div>
 
       {/* Health Signals */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-sky-200 p-5 shadow-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Backup Terakhir</span>
             <Database className="w-4 h-4 text-emerald-600" />
@@ -119,7 +119,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           <p className="text-[11px] text-slate-500 font-sans mt-2">{backupDetail}</p>
         </div>
 
-        <div className="bg-white border border-sky-200 p-5 shadow-xs">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs">
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">SSL / Domain</span>
             <Globe2 className="w-4 h-4 text-sky-600" />
@@ -128,7 +128,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           <p className="text-[11px] text-slate-500 font-sans mt-2">Status koneksi domain/API dari sinkronisasi terakhir.</p>
         </div>
 
-        <div onClick={() => onNavigateTab('alerts')} className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
+        <div onClick={() => onNavigateTab('alerts')} className="bg-white border border-sky-200 p-4 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Alert Aktif</span>
             <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -137,7 +137,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           <p className="text-[11px] text-slate-500 font-sans mt-2">Critical: {criticalAlertCount}, Warning: {warningAlertCount}</p>
         </div>
 
-        <div onClick={() => onNavigateTab('servers')} className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
+        <div onClick={() => onNavigateTab('servers')} className="bg-white border border-sky-200 p-4 shadow-xs hover:border-sky-400 transition-colors cursor-pointer">
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Koneksi Monitoring</span>
             <PlugZap className="w-4 h-4 text-sky-600" />
@@ -148,10 +148,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
       </div>
 
       {/* Infrastructure Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <div 
           onClick={() => onNavigateTab('servers')}
-          className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
+          className="bg-white border border-sky-200 p-4 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Total Server Fleet</span>
@@ -170,7 +170,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
 
         <div 
           onClick={() => onNavigateTab('servers')}
-          className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
+          className="bg-white border border-sky-200 p-4 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Server Aktif</span>
@@ -189,7 +189,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
 
         <div 
           onClick={() => onNavigateTab('alerts')}
-          className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
+          className="bg-white border border-sky-200 p-4 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Warning / Degraded</span>
@@ -208,7 +208,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
 
         <div 
           onClick={() => onNavigateTab('alerts')}
-          className="bg-white border border-sky-200 p-5 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
+          className="bg-white border border-sky-200 p-4 shadow-xs hover:border-sky-400 transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between mb-3">
             <span className="font-mono text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Critical Issues</span>
@@ -227,8 +227,8 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
       </div>
 
       {/* Risk & Service Health */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white border border-sky-200 p-6 shadow-xs lg:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs lg:col-span-2 space-y-3">
           <div className="flex items-center justify-between border-b border-sky-100 pb-3">
             <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center space-x-2">
               <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -241,7 +241,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           </div>
 
           {riskAlerts.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {riskAlerts.map((alert) => (
                 <div key={alert.id} className="p-4 bg-sky-50/40 border border-sky-100 space-y-2">
                   <div className="flex items-center justify-between">
@@ -254,7 +254,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
               ))}
             </div>
           ) : riskServers.length ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {riskServers.map((srv) => (
               <div key={srv.id} className="p-4 bg-sky-50/40 border border-sky-100 space-y-2">
                 <div className="flex items-center justify-between">
@@ -286,7 +286,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
           )}
         </div>
 
-        <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-sky-100 pb-3">
             <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center space-x-2">
               <Wifi className="w-4 h-4 text-sky-600" />
@@ -311,9 +311,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
       </div>
 
       {/* Server Performance Summary & Quick Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Resource Usage Summary */}
-        <div className="bg-white border border-sky-200 p-6 shadow-xs lg:col-span-2 space-y-5">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between border-b border-sky-100 pb-3">
             <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center space-x-2">
               <Cpu className="w-4 h-4 text-sky-600" />
@@ -328,7 +328,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="p-4 bg-sky-50/40 border border-sky-100 space-y-2">
               <div className="flex justify-between items-center text-xs font-mono">
                 <span className="text-slate-600">CPU Usage</span>
@@ -432,7 +432,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
         </div>
 
         {/* Recent Activity & Quick Connection Status */}
-        <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-5 flex flex-col justify-between">
+        <div className="bg-white border border-sky-200 p-4 shadow-xs space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between border-b border-sky-100 pb-3 mb-4">
               <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center space-x-2">
