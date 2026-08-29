@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  Server, Activity, AlertTriangle, RefreshCw, ShieldCheck, 
-  HardDrive, FileText, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Bell 
+import {
+  Server, Activity, AlertTriangle, RefreshCw, ShieldCheck,
+  HardDrive, FileText, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Bell, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, BillingAccount, BillingInvoice, BillingPlan, BillingPlanRequest, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
 import { BrandLogo } from '../BrandLogo';
@@ -98,10 +98,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     <div className="min-h-screen bg-sky-50/30 font-sans flex text-slate-900 antialiased">
       {/* Sidebar for Desktop */}
       <aside className={`hidden lg:flex ${desktopSidebarOpen ? 'w-48' : 'w-16'} bg-white border-r border-sky-100 flex-col fixed inset-y-0 z-30 transition-all duration-200 shadow-sm`}>
+        <button
+          onClick={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
+          className="absolute -right-3 top-5 hidden h-7 w-7 items-center justify-center border border-sky-200 bg-white text-slate-600 shadow-sm hover:text-sky-600 lg:flex"
+          aria-label={desktopSidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+        >
+          {desktopSidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </button>
         {/* Brand */}
-        <div className={`px-2 py-3 border-b border-sky-100 ${desktopSidebarOpen ? '' : 'flex justify-center'}`}>
+        <div className="flex justify-center border-b border-sky-100 px-2 py-3">
           <div className="inline-flex max-w-full overflow-hidden items-center">
-            <BrandLogo asset="sidebar" className="h-12 w-auto max-w-[104px]" />
+            <BrandLogo asset="sidebar" className="h-16 w-auto max-w-[132px]" />
           </div>
         </div>
 
@@ -124,7 +131,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 }`}
               >
                 <div className={`flex items-center ${desktopSidebarOpen ? 'space-x-3' : ''}`}>
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-5 h-5" />
                   {desktopSidebarOpen && <span>{item.label}</span>}
                 </div>
                 {desktopSidebarOpen && item.badge ? (
@@ -143,7 +150,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             onClick={onLogout}
             className={`w-full flex items-center ${desktopSidebarOpen ? 'space-x-2 px-2.5' : 'justify-center px-1.5'} py-1.5 font-mono text-[11px] uppercase tracking-wider text-rose-600 hover:bg-rose-50 transition-colors border border-rose-100`}
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-5 h-5" />
             {desktopSidebarOpen && <span>Sign Out Session</span>}
           </button>
         </div>
@@ -154,13 +161,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         {/* Top Navbar */}
         <header className="bg-white border-b border-sky-200 h-14 flex items-center justify-between px-2 lg:px-3 sticky top-0 z-20 shadow-xs">
           <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
-              className="hidden lg:flex p-1.5 text-slate-700 hover:text-sky-600 border border-sky-200 bg-white"
-              aria-label={desktopSidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
-            >
-              {desktopSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
             <button
               onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
               className="lg:hidden p-2 text-slate-700 hover:text-sky-600"
@@ -226,7 +226,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       currentTab === item.id ? 'bg-sky-500 text-white font-bold' : 'text-slate-700 hover:bg-sky-50 hover:text-sky-700'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-5 h-5" />
                     <span>{item.label}</span>
                   </button>
                 );
