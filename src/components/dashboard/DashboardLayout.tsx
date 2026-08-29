@@ -152,11 +152,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       {/* Main Content Area */}
       <div className={`flex-1 ${desktopSidebarOpen ? 'lg:pl-48' : 'lg:pl-16'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
         {/* Top Navbar */}
-        <header className="bg-white border-b border-sky-200 h-16 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-20 shadow-xs">
-          <div className="flex items-center space-x-4">
+        <header className="bg-white border-b border-sky-200 h-14 flex items-center justify-between px-3 lg:px-4 sticky top-0 z-20 shadow-xs">
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
-              className="hidden lg:flex p-2 text-slate-700 hover:text-sky-600 border border-sky-200 bg-white"
+              className="hidden lg:flex p-1.5 text-slate-700 hover:text-sky-600 border border-sky-200 bg-white"
               aria-label={desktopSidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
             >
               {desktopSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -175,11 +175,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
             <div className="relative">
               <button 
                 onClick={() => setCurrentTab('alerts')}
-                className="p-2 text-slate-600 hover:text-sky-600 relative border border-sky-200 bg-sky-50/50"
+                className="p-1.5 text-slate-600 hover:text-sky-600 relative border border-sky-200 bg-sky-50/50"
               >
                 <Bell className="w-4 h-4" />
                 {alerts.filter(a => a.status === 'Monitoring').length > 0 && (
@@ -190,7 +190,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center space-x-3 border-l border-sky-200 pl-4">
+            <div className="flex items-center space-x-2 border-l border-sky-200 pl-3">
               <div className="w-8 h-8 bg-sky-500 text-white font-mono text-xs font-bold flex items-center justify-center">
                 AS
               </div>
@@ -236,7 +236,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         )}
 
         {/* View Switcher Container */}
-        <main className="flex-1 p-6 lg:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 lg:p-4 max-w-7xl w-full mx-auto">
           {currentTab === 'overview' && (
             <OverviewView 
               servers={servers} 
