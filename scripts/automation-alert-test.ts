@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 
 process.env.SUPABASE_URL = 'https://supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+process.env.SMTP_USER = 'alerts@syncera.test';
+process.env.SMTP_PASS = 'secret';
+process.env.ALERT_EMAIL_TO = 'owner@syncera.test';
+process.env.SMTP_TEST_CAPTURE = '1';
 
 const server = {
   id: 'srv-pve',
@@ -48,4 +52,9 @@ assert.deepEqual(titles, [
   'RAM tinggi di PVE Jakarta',
   'VM/CT offline di PVE Jakarta',
 ].sort());
+const mails = (globalThis as any).__sentMails || [];
+assert.equal(mails.length, 1);
+assert.equal(mails[0].subject, '[Syncera Alert] 4 alert di PVE Jakarta');
+assert.match(mails[0].body, /CPU tinggi di PVE Jakarta/);
+assert.match(mails[0].body, /VM\/CT offline di PVE Jakarta/);
 console.log('automation alert ok');

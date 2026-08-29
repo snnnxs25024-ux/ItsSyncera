@@ -1,3 +1,6 @@
+import net from 'node:net';
+import tls from 'node:tls';
+
 type Row = Record<string, any>;
 
 type RunStatus = 'success' | 'failed' | 'running' | 'blocked';
@@ -23,6 +26,89 @@ const headers = (extra: Record<string, string> = {}) => {
     Accept: 'application/json',
     ...extra,
   };
+};
+
+const emailAddress = (value: string) => value.match(/<([^>]+)>/)?.[1]?.trim() || value.trim();
+
+const alertEmailConfig = () => {
+  const user = String(process.env.SMTP_USER || '').trim();
+  const pass = String(process.env.SMTP_PASS || '').trim();
+  const to = String(process.env.ALERT_EMAIL_TO || process.env.SMTP_TO || '').split(',').map((item) => item.trim()).filter(Boolean);
+  if (!user || !pass || !to.length) return null;
+  return {
+    host: String(process.env.SMTP_HOST || 'smtp.hostinger.com').trim(),
+    port: Number(process.env.SMTP_PORT || 465),
+    user,
+    pass,
+    from: String(process.env.SMTP_FROM || `It's Syncera <${user}>`).trim(),
+    to,
+  };
+};
+
+const sendSmtpMail = async (subject: string, body: string) => {
+  const config = alertEmailConfig();
+  if (!config) return false;
+  if (process.env.SMTP_TEST_CAPTURE === '1') {
+    (globalThis as any).__sentMails = [...((globalThis as any).__sentMails || []), { subject, body, to: config.to }];
+    return true;
+  }
+  const envelopeFrom = emailAddress(config.from);
+  const message = [
+    `From: ${config.from}`,
+    `To: ${config.to.join(', ')}`,
+    `Subject: ${subject.replace(/[\r\n]/g, ' ')}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    body,
+  ].join('\r\n').replace(/\r?\n\./g, '\r\n..');
+
+  await new Promise<void>((resolve, reject) => {
+    const socket = tls.connect({ host: config.host, port: config.port, servername: config.host });
+    let buffer = '';
+    let waitResolve: ((reply: string) => void) | null = null;
+    const fail = (err: Error) => { socket.destroy(); reject(err); };
+    const timer = setTimeout(() => fail(new Error('SMTP timeout')), 15000);
+    const read = () => new Promise<string>((done) => { waitResolve = done; });
+    const send = async (line: string, ok: RegExp) => {
+      socket.write(`${line}\r\n`);
+      const reply = await read();
+      if (!ok.test(reply)) throw new Error(`SMTP rejected ${line.split(' ')[0]}: ${reply.trim().slice(0, 120)}`);
+    };
+    socket.on('data', (chunk) => {
+      buffer += chunk.toString('utf8');
+      if (/(^|\r?\n)\d{3} [^\r\n]*(\r?\n|$)/.test(buffer) && waitResolve) {
+        const reply = buffer;
+        buffer = '';
+        const done = waitResolve;
+        waitResolve = null;
+        done(reply);
+      }
+    });
+    socket.on('error', fail);
+    socket.on('secureConnect', async () => {
+      try {
+        const hello = await read();
+        if (!/^220/m.test(hello)) throw new Error(`SMTP hello failed: ${hello.trim()}`);
+        await send('EHLO sync.ipt.solutions', /^250/m);
+        await send('AUTH LOGIN', /^334/m);
+        await send(Buffer.from(config.user).toString('base64'), /^334/m);
+        await send(Buffer.from(config.pass).toString('base64'), /^235/m);
+        await send(`MAIL FROM:<${envelopeFrom}>`, /^250/m);
+        for (const target of config.to) await send(`RCPT TO:<${emailAddress(target)}>`, /^25[01]/m);
+        await send('DATA', /^354/m);
+        await send(`${message}\r\n.`, /^250/m);
+        socket.write('QUIT\r\n');
+        clearTimeout(timer);
+        socket.end();
+        resolve();
+      } catch (err) {
+        clearTimeout(timer);
+        fail(err instanceof Error ? err : new Error('SMTP failed'));
+      }
+    });
+  });
+  return true;
 };
 
 const readTable = async (table: string) => {
@@ -203,6 +289,14 @@ const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `alerts upsert: ${res.status} ${body.slice(0, 160)}`.trim());
+  try {
+    await sendSmtpMail(
+      `[Syncera Alert] ${rows.length} alert di ${name}`,
+      rows.map((row) => `${String(row.severity).toUpperCase()} — ${row.title}\nServer: ${row.server}\nStatus: ${row.status}\nAction: ${row.action_taken}`).join('\n\n'),
+    );
+  } catch {
+    // ponytail: email failure must not block monitoring; add delivery log table when notification center exists.
+  }
   return rows;
 };
 
