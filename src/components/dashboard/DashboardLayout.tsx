@@ -55,6 +55,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [currentTab, setCurrentTab] = useState<DashboardTab>('overview');
   const [selectedServer, setSelectedServer] = useState<ServerItem | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [servers, setServers] = useState<ServerItem[]>(initialServers);
 
   React.useEffect(() => {
@@ -94,19 +95,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 font-sans flex text-slate-900 antialiased">
+    <div className="min-h-screen bg-sky-50/30 font-sans flex text-slate-900 antialiased">
       {/* Sidebar for Desktop */}
-      <aside className="hidden lg:flex w-64 bg-slate-900 border-r border-sky-900/50 flex-col fixed inset-y-0 z-30">
+      <aside className={`hidden lg:flex ${desktopSidebarOpen ? 'w-64' : 'w-20'} bg-white border-r border-sky-100 flex-col fixed inset-y-0 z-30 transition-all duration-200 shadow-sm`}>
         {/* Brand */}
-        <div className="p-5 border-b border-sky-900/40">
-          <div className="bg-white border border-sky-200 p-2 inline-flex max-w-full overflow-hidden">
-            <BrandLogo asset="mark" className="h-16 w-auto max-w-[200px]" />
+        <div className={`p-4 border-b border-sky-100 ${desktopSidebarOpen ? '' : 'flex justify-center'}`}>
+          <div className="inline-flex max-w-full overflow-hidden">
+            <BrandLogo asset="mark" className="h-10 w-auto max-w-[72px]" />
           </div>
-          <span className="font-mono text-[9px] text-sky-400 tracking-widest uppercase block mt-2">Enterprise Cloud</span>
+          {desktopSidebarOpen && (
+            <span className="font-mono text-[9px] text-sky-600 tracking-widest uppercase block mt-2">Enterprise Cloud</span>
+          )}
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -117,17 +120,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   setCurrentTab(item.id);
                   if (item.id !== 'servers') setSelectedServer(null);
                 }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                className={`w-full flex items-center ${desktopSidebarOpen ? 'justify-between px-3.5' : 'justify-center px-2'} py-2.5 font-mono text-xs uppercase tracking-wider transition-colors ${
                   isActive
                     ? 'bg-sky-500 text-white font-bold shadow-xs'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    : 'text-slate-600 hover:text-sky-700 hover:bg-sky-50'
                 }`}
               >
-                <div className="flex items-center space-x-3">
+                <div className={`flex items-center ${desktopSidebarOpen ? 'space-x-3' : ''}`}>
                   <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  {desktopSidebarOpen && <span>{item.label}</span>}
                 </div>
-                {item.badge ? (
+                {desktopSidebarOpen && item.badge ? (
                   <span className="px-1.5 py-0.5 bg-rose-500 text-white font-mono text-[9px] font-bold">
                     {item.badge}
                   </span>
@@ -138,22 +141,29 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         </nav>
 
         {/* Logout */}
-        <div className="p-4 border-t border-sky-900/40">
+        <div className="p-3 border-t border-sky-100">
           <button
             onClick={onLogout}
-            className="w-full flex items-center space-x-3 px-3.5 py-2.5 font-mono text-xs uppercase tracking-wider text-rose-400 hover:bg-rose-950/30 transition-colors border border-rose-900/40"
+            className={`w-full flex items-center ${desktopSidebarOpen ? 'space-x-3 px-3.5' : 'justify-center px-2'} py-2.5 font-mono text-xs uppercase tracking-wider text-rose-600 hover:bg-rose-50 transition-colors border border-rose-100`}
           >
             <LogOut className="w-4 h-4" />
-            <span>Sign Out Session</span>
+            {desktopSidebarOpen && <span>Sign Out Session</span>}
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-h-screen bg-sky-50/20">
+      <div className={`flex-1 ${desktopSidebarOpen ? 'lg:pl-64' : 'lg:pl-20'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
         {/* Top Navbar */}
         <header className="bg-white border-b border-sky-200 h-16 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-20 shadow-xs">
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setDesktopSidebarOpen(!desktopSidebarOpen)}
+              className="hidden lg:flex p-2 text-slate-700 hover:text-sky-600 border border-sky-200 bg-white"
+              aria-label={desktopSidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+            >
+              {desktopSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
             <button
               onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
               className="lg:hidden p-2 text-slate-700 hover:text-sky-600"
@@ -197,10 +207,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
         {/* Mobile Navigation Drawer */}
         {mobileSidebarOpen && (
-          <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 flex flex-col p-6 space-y-4">
-            <div className="flex justify-between items-center border-b border-sky-800 pb-4">
-              <span className="bg-white border border-sky-200 p-1 inline-flex"><BrandLogo asset="mark" className="h-14 w-auto max-w-[180px]" /></span>
-              <button onClick={() => setMobileSidebarOpen(false)} className="text-white p-1">
+          <div className="lg:hidden fixed inset-0 z-50 bg-white flex flex-col p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-sky-100 pb-4">
+              <span className="inline-flex"><BrandLogo asset="mark" className="h-10 w-auto max-w-[96px]" /></span>
+              <button onClick={() => setMobileSidebarOpen(false)} className="text-slate-700 p-1">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -215,8 +225,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       setMobileSidebarOpen(false);
                       if (item.id !== 'servers') setSelectedServer(null);
                     }}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 font-mono text-xs uppercase text-white ${
-                      currentTab === item.id ? 'bg-sky-500 font-bold' : 'hover:bg-slate-800'
+                    className={`w-full flex items-center space-x-3 px-4 py-3 font-mono text-xs uppercase ${
+                      currentTab === item.id ? 'bg-sky-500 text-white font-bold' : 'text-slate-700 hover:bg-sky-50 hover:text-sky-700'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
