@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, ArrowRight } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
 interface NavbarProps {
@@ -50,13 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
           >
             <span>Sign In</span>
           </button>
-          <button
-            onClick={() => onOpenAuth('register')}
-            className="px-5 py-2.5 text-xs font-mono uppercase tracking-wider bg-sky-500 hover:bg-sky-600 text-white rounded-none transition-all flex items-center space-x-2 border border-sky-400 shadow-sm font-bold"
-          >
-            <span>Sign Up</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
 
         {/* Mobile menu button */}
@@ -97,18 +90,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth, onNavigate }) => {
           >
             PRICING
           </button>
-          <div className="pt-4 grid grid-cols-2 gap-3">
+          <div className="pt-4">
             <button
               onClick={() => { setMobileMenuOpen(false); onOpenAuth('login'); }}
               className="w-full py-3 text-xs font-mono uppercase tracking-wider text-center bg-white text-slate-800 border border-sky-300 rounded-none font-bold"
             >
               Sign In
-            </button>
-            <button
-              onClick={() => { setMobileMenuOpen(false); onOpenAuth('register'); }}
-              className="w-full py-3 text-xs font-mono uppercase tracking-wider text-center bg-sky-500 text-white rounded-none font-bold"
-            >
-              Sign Up
             </button>
           </div>
         </div>
