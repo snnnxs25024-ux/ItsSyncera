@@ -97,11 +97,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   return (
     <div className="min-h-screen bg-sky-50/30 font-sans flex text-slate-900 antialiased">
       {/* Sidebar for Desktop */}
-      <aside className={`hidden lg:flex ${desktopSidebarOpen ? 'w-56' : 'w-16'} bg-white border-r border-sky-100 flex-col fixed inset-y-0 z-30 transition-all duration-200 shadow-sm`}>
+      <aside className={`hidden lg:flex ${desktopSidebarOpen ? 'w-48' : 'w-16'} bg-white border-r border-sky-100 flex-col fixed inset-y-0 z-30 transition-all duration-200 shadow-sm`}>
         {/* Brand */}
-        <div className={`p-3 border-b border-sky-100 ${desktopSidebarOpen ? '' : 'flex justify-center'}`}>
+        <div className={`px-2 py-3 border-b border-sky-100 ${desktopSidebarOpen ? '' : 'flex justify-center'}`}>
           <div className="inline-flex max-w-full overflow-hidden items-center">
-            <BrandLogo asset="sidebar" className="h-8 w-auto max-w-[56px]" />
+            <BrandLogo asset="sidebar" className="h-12 w-auto max-w-[104px]" />
           </div>
         </div>
 
@@ -150,7 +150,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       </aside>
 
       {/* Main Content Area */}
-      <div className={`flex-1 ${desktopSidebarOpen ? 'lg:pl-56' : 'lg:pl-16'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
+      <div className={`flex-1 ${desktopSidebarOpen ? 'lg:pl-48' : 'lg:pl-16'} flex flex-col min-h-screen bg-sky-50/30 transition-all duration-200`}>
         {/* Top Navbar */}
         <header className="bg-white border-b border-sky-200 h-16 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-20 shadow-xs">
           <div className="flex items-center space-x-4">
