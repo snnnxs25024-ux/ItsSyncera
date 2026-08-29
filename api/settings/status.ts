@@ -71,8 +71,9 @@ export default async function handler(req: any, res: any) {
       { name: 'Phone', status: 'not_configured', detail: 'No account settings API connected' },
       { name: 'Address', status: 'not_configured', detail: 'No account settings API connected' },
     ];
+    const emailReady = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS && (process.env.ALERT_EMAIL_TO || process.env.SMTP_TO));
     const notifications: StatusItem[] = [
-      { name: 'Email Alerts', status: 'not_configured', detail: 'SMTP/Email provider not connected' },
+      { name: 'Email Alerts', status: emailReady ? 'configured' : 'not_configured', detail: emailReady ? `SMTP alert email ready → ${process.env.ALERT_EMAIL_TO || process.env.SMTP_TO}` : 'Set SMTP_USER, SMTP_PASS, ALERT_EMAIL_TO in Vercel env' },
       { name: 'WhatsApp Alerts', status: 'not_configured', detail: 'WhatsApp bridge not connected' },
       { name: 'Telegram Alerts', status: 'not_configured', detail: 'Telegram notification target not configured' },
       { name: 'Webhook Alerts', status: 'not_configured', detail: 'No webhook target configured' },

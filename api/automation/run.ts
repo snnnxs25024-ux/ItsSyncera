@@ -1,4 +1,3 @@
-import net from 'node:net';
 import tls from 'node:tls';
 
 type Row = Record<string, any>;
@@ -67,9 +66,14 @@ const sendSmtpMail = async (subject: string, body: string) => {
     const socket = tls.connect({ host: config.host, port: config.port, servername: config.host });
     let buffer = '';
     let waitResolve: ((reply: string) => void) | null = null;
+    const hasReply = () => /(^|\r?\n)\d{3} [^\r\n]*(\r?\n|$)/.test(buffer);
+    const takeReply = () => { const reply = buffer; buffer = ''; return reply; };
     const fail = (err: Error) => { socket.destroy(); reject(err); };
     const timer = setTimeout(() => fail(new Error('SMTP timeout')), 15000);
-    const read = () => new Promise<string>((done) => { waitResolve = done; });
+    const read = () => new Promise<string>((done) => {
+      if (hasReply()) return done(takeReply());
+      waitResolve = done;
+    });
     const send = async (line: string, ok: RegExp) => {
       socket.write(`${line}\r\n`);
       const reply = await read();
@@ -77,12 +81,10 @@ const sendSmtpMail = async (subject: string, body: string) => {
     };
     socket.on('data', (chunk) => {
       buffer += chunk.toString('utf8');
-      if (/(^|\r?\n)\d{3} [^\r\n]*(\r?\n|$)/.test(buffer) && waitResolve) {
-        const reply = buffer;
-        buffer = '';
+      if (hasReply() && waitResolve) {
         const done = waitResolve;
         waitResolve = null;
-        done(reply);
+        done(takeReply());
       }
     });
     socket.on('error', fail);
