@@ -173,6 +173,39 @@ const insertMetricSnapshot = async (server: Row, metrics: Row) => {
   if (!res.ok) throw new ApiError(502, `metric_snapshots insert: ${res.status} ${body.slice(0, 160)}`.trim());
 };
 
+const alertId = (server: Row, kind: string) => `alert-proxmox-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${kind}`;
+
+const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
+  const name = server.name || 'Proxmox server';
+  const services = Array.isArray(metrics.services) ? metrics.services : [];
+  const offline = services.filter((service) => service.status === 'offline');
+  const detectedAt = nowLabel();
+  const issues = [
+    Number(metrics.cpuUsage ?? 0) > 90 && { id: alertId(server, 'cpu'), severity: 'critical', title: `CPU tinggi di ${name}` },
+    Number(metrics.memoryUsage ?? 0) > 90 && { id: alertId(server, 'memory'), severity: 'warning', title: `RAM tinggi di ${name}` },
+    Number(metrics.storageUsage ?? 0) > 85 && { id: alertId(server, 'disk'), severity: 'warning', title: `Disk hampir penuh di ${name}` },
+    offline.length > 0 && { id: alertId(server, 'vmct-offline'), severity: 'critical', title: `VM/CT offline di ${name}` },
+  ].filter(Boolean) as Row[];
+  const rows = issues.map((issue) => ({
+    id: issue.id,
+    severity: issue.severity,
+    title: issue.title,
+    server: name,
+    detected_at: detectedAt,
+    status: 'Monitoring',
+    action_taken: 'Auto-created by Proxmox health check; no risky action executed.',
+  }));
+  if (!rows.length) return [];
+  const res = await fetch(`${baseUrl}/rest/v1/alerts?on_conflict=id`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify(rows),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(502, `alerts upsert: ${res.status} ${body.slice(0, 160)}`.trim());
+  return rows;
+};
+
 const proxmoxBaseUrl = (server: Row) => {
   const host = String(server.proxmox_host || server.ip_address || server.ipAddress || '').trim().replace(/\/$/, '');
   if (!host) throw new ApiError(400, 'Host Proxmox wajib diisi');
@@ -231,6 +264,7 @@ const executeProxmoxHealth = async (serverId?: string) => {
   const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
   await patchServerHealth(server, metrics);
   await insertMetricSnapshot(server, metrics);
+  await upsertProxmoxAlerts(server, metrics);
   return insertRunRow({
     id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
     automation_id: null,
@@ -254,6 +288,7 @@ export default async function handler(req: any, res: any) {
             const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
             await patchServerHealth(server, metrics);
             await insertMetricSnapshot(server, metrics);
+            const alerts = await upsertProxmoxAlerts(server, metrics);
             results.push(await insertRunRow({
               id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
               automation_id: null,

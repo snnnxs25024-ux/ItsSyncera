@@ -162,8 +162,8 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
           </div>
           <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] uppercase font-bold">{proxmoxServers.length} server connected</span>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {['Health Check Proxmox', 'Sync VM/CT Status', 'Update Dashboard Metrics'].map((item) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {['Health Check Proxmox', 'Sync VM/CT Status', 'Update Dashboard Metrics', 'Create Internal Alerts'].map((item) => (
             <div key={item} className="border border-sky-100 bg-sky-50/20 p-3 flex items-center gap-2 font-mono text-xs text-slate-700">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>{item}</span>
@@ -222,7 +222,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
           {[
             ['Interval', 'Setiap 30 menit'],
             ['Trigger', 'Vercel Cron → /api/automation/run'],
-            ['Aksi', 'Health check + sync VM/CT + update metrics + snapshot'],
+            ['Aksi', 'Health check + sync VM/CT + update metrics + snapshot + alert'],
             ['Scope', `Semua Proxmox connected (${proxmoxServers.length})`],
           ].map(([label, value]) => (
             <div key={String(label)} className="bg-sky-50/20 border border-sky-100 p-3">
