@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Server, CheckCircle2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -67,8 +68,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, initialMode, onClo
         </button>
 
         <div className="flex items-center space-x-3 mb-5">
-          <div className="w-9 h-9 bg-sky-500 flex items-center justify-center rounded-none border border-sky-400 shadow-xs">
-            <Server className="w-4 h-4 text-white" />
+          <div className="shrink-0 bg-white flex items-center justify-center rounded-none border border-sky-200 shadow-xs px-2 py-1">
+            <BrandLogo className="h-10 w-auto max-w-[112px]" />
           </div>
           <div>
             <span className="font-mono text-base font-bold uppercase tracking-wider block leading-none text-slate-900">
@@ -96,29 +97,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, initialMode, onClo
           </div>
         ) : (
           <div className="space-y-4">
-            {mode === 'login' && (
-              <div className="p-3 bg-sky-500 text-white border border-sky-400 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-[10px] font-bold uppercase tracking-wider">🚀 Pintasan Cepat</span>
-                  <span className="text-[9px] bg-sky-600 px-1.5 py-0.5 uppercase">Demo Mode</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubmitted(true);
-                    setTimeout(() => {
-                      setSubmitted(false);
-                      onClose();
-                      onSuccess();
-                    }, 1200);
-                  }}
-                  className="w-full py-2 bg-white text-sky-900 font-mono text-xs uppercase font-bold hover:bg-sky-50 transition-colors shadow-xs"
-                >
-                  ⚡ Masuk Instan ke Dashboard Enterprise
-                </button>
-              </div>
-            )}
-
             {/* Social Logins */}
             <div className="grid grid-cols-2 gap-3">
               <button
