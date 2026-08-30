@@ -15,7 +15,17 @@ const writes: any[] = [];
   throw new Error(`unexpected fetch ${method} ${url}`);
 };
 
-const { default: handler } = await import('../api/notification-channels.ts');
+const { default: handler } = await import('../api/automation/run.ts');
+const listRes = {
+  code: 0,
+  payload: undefined as any,
+  status(code: number) { this.code = code; return this; },
+  setHeader() {},
+  json(payload: unknown) { this.payload = payload; return this; },
+};
+await handler({ method: 'GET', query: { type: 'notification_channels' } }, listRes);
+assert.equal(listRes.code, 200);
+assert.deepEqual(listRes.payload, { success: true, channels: [] });
 const res = {
   code: 0,
   payload: undefined as any,
@@ -23,7 +33,7 @@ const res = {
   setHeader() {},
   json(payload: unknown) { this.payload = payload; return this; },
 };
-await handler({ method: 'POST', body: { serverId: 'srv-pve', recipient: 'ops@example.com', enabled: true, severityFilter: 'critical', cooldownMinutes: 60 } }, res);
+await handler({ method: 'POST', body: { type: 'notification_channel', serverId: 'srv-pve', recipient: 'ops@example.com', enabled: true, severityFilter: 'critical', cooldownMinutes: 60 } }, res);
 assert.equal(res.code, 200);
 assert.equal(writes.length, 1);
 assert.equal(writes[0].server_id, 'srv-pve');

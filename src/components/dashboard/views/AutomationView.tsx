@@ -87,7 +87,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
   React.useEffect(() => setRuns(automationRuns), [automationRuns]);
 
   React.useEffect(() => {
-    fetch('/api/notification-channels')
+    fetch('/api/automation/run?type=notification_channels')
       .then((res) => res.json())
       .then((data) => {
         if (!data.success) return;
@@ -115,10 +115,10 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
     setMessage('');
     const draft = draftFor(serverId);
     try {
-      const res = await fetch('/api/notification-channels', {
+      const res = await fetch('/api/automation/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serverId, ...draft }),
+        body: JSON.stringify({ type: 'notification_channel', serverId, ...draft }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);

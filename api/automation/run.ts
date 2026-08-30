@@ -133,6 +133,51 @@ const bodyOf = (req: any) => {
   return req.body;
 };
 
+const clean = (value: unknown, max = 240) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+const queryValue = (req: any, key: string) => clean(req.query?.[key] ?? new URL(req.url || '/', 'https://sync.ipt.solutions').searchParams.get(key), 160);
+const emailList = (value: string) => value.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
+const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const notificationChannelId = (serverId: string) => `notif-email-${serverId.replace(/[^a-z0-9-]/gi, '-')}`;
+const severityOf = (value: unknown) => ['critical', 'warning', 'all'].includes(String(value)) ? String(value) : 'critical';
+const cooldownOf = (value: unknown) => Math.min(1440, Math.max(15, Number(value || 60) || 60));
+
+const mapNotificationChannel = (row: Row) => ({
+  id: String(row.id),
+  serverId: String(row.server_id ?? ''),
+  channel: row.channel ?? 'email',
+  recipient: row.recipient ?? '',
+  enabled: row.enabled !== false,
+  severityFilter: row.severity_filter ?? 'critical',
+  cooldownMinutes: Number(row.cooldown_minutes ?? 60),
+  lastSentAt: row.last_sent_at ?? '',
+  updatedAt: row.updated_at ?? '',
+});
+
+const upsertNotificationChannel = async (input: Row) => {
+  const serverId = clean(input.serverId ?? input.server_id, 120);
+  const recipients = emailList(clean(input.recipient, 400));
+  if (!serverId) throw new ApiError(400, 'serverId wajib diisi');
+  if (!recipients.length || recipients.some((email) => !validEmail(email))) throw new ApiError(400, 'Email penerima tidak valid');
+  const row = {
+    id: notificationChannelId(serverId),
+    server_id: serverId,
+    channel: 'email',
+    recipient: recipients.join(', '),
+    enabled: input.enabled !== false,
+    severity_filter: severityOf(input.severityFilter ?? input.severity_filter),
+    cooldown_minutes: cooldownOf(input.cooldownMinutes ?? input.cooldown_minutes),
+    updated_at: nowIso(),
+  };
+  const res = await fetch(`${baseUrl}/rest/v1/notification_channels?on_conflict=id`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' }),
+    body: JSON.stringify(row),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new ApiError(res.status, `notification_channels upsert: ${text.slice(0, 180)}`.trim());
+  return mapNotificationChannel(JSON.parse(text || '[]')[0] ?? row);
+};
+
 const nowIso = () => new Date().toISOString();
 const nowLabel = () => new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour12: false });
 const isSafeType = (type: string) => type === 'health_check' || type === 'monitoring';
@@ -435,6 +480,13 @@ const executeProxmoxHealth = async (serverId?: string) => {
 export default async function handler(req: any, res: any) {
   try {
     if (req.method === 'GET') {
+      if (queryValue(req, 'type') === 'notification_channels') {
+        const serverId = queryValue(req, 'serverId') || queryValue(req, 'server_id');
+        const channels = (await readOptionalTable('notification_channels'))
+          .filter((row) => row.channel === 'email' && (!serverId || String(row.server_id) === serverId))
+          .map(mapNotificationChannel);
+        return res.status(200).json({ success: true, channels });
+      }
       // Vercel cron: run Proxmox health check on all connected servers automatically
       if (String(req.headers?.['x-vercel-cron'] || '').trim() || String(req.headers?.['x-vercel-cron-secret'] || '').trim()) {
         const results: Row[] = [];
@@ -478,6 +530,10 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'POST') {
       const body = bodyOf(req);
+      if (body.type === 'notification_channel') {
+        const channel = await upsertNotificationChannel(body);
+        return res.status(200).json({ success: true, channel });
+      }
       if (body.type === 'proxmox_health_check') {
         const run = await executeProxmoxHealth(body.serverId ? String(body.serverId) : undefined);
         return res.status(200).json({ success: true, run });
