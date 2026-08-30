@@ -374,6 +374,36 @@ const sendServerAlertEmails = async (server: Row, alerts: Row[]) => {
   }
 };
 
+const sendNotificationTest = async (serverId: string) => {
+  const server = (await readOptionalTable('servers')).find((item) => String(item.id) === serverId);
+  if (!server) throw new ApiError(404, 'Server tidak ditemukan');
+  const channels = (await readOptionalTable('notification_channels')).filter((channel) =>
+    channel.channel === 'email' && channel.enabled !== false && String(channel.server_id) === String(server.id)
+  );
+  if (!channels.length) throw new ApiError(400, 'Email alert server belum disimpan');
+  let sent = 0;
+  for (const channel of channels) {
+    const ok = await sendSmtpMail(
+      recipientsOf(channel.recipient),
+      `[Syncera Test] Laporan ${server.name || 'Server'}`,
+      [
+        `Laporan test It's Syncera`,
+        `Server: ${server.name || '-'}`,
+        `Status: ${server.status || '-'}`,
+        `Koneksi: ${server.connection_status || '-'}`,
+        `CPU: ${server.cpu_usage ?? server.cpuUsage ?? 0}%`,
+        `RAM: ${server.memory_usage ?? server.memoryUsage ?? 0}%`,
+        `Disk: ${server.storage_usage ?? server.storageUsage ?? 0}%`,
+        `Waktu: ${nowLabel()}`,
+      ].join('\n'),
+    );
+    if (!ok) throw new ApiError(500, 'SMTP sender not configured');
+    await insertDelivery(channel, [], 'sent', 'manual test report sent');
+    sent += 1;
+  }
+  return { server: server.name || 'Server', sent };
+};
+
 const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   const name = server.name || 'Proxmox server';
   const services = Array.isArray(metrics.services) ? metrics.services : [];
@@ -533,6 +563,10 @@ export default async function handler(req: any, res: any) {
       if (body.type === 'notification_channel') {
         const channel = await upsertNotificationChannel(body);
         return res.status(200).json({ success: true, channel });
+      }
+      if (body.type === 'notification_test') {
+        const result = await sendNotificationTest(String(body.serverId || ''));
+        return res.status(200).json({ success: true, ...result });
       }
       if (body.type === 'proxmox_health_check') {
         const run = await executeProxmoxHealth(body.serverId ? String(body.serverId) : undefined);
