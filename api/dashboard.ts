@@ -33,9 +33,42 @@ const readOptionalTable = async (table: string) => {
   try {
     return await readTable(table);
   } catch (err) {
-    if (err instanceof ApiError && (err.message.includes("Could not find the table") || ['metric_snapshots', 'automation_rules', 'automation_runs', 'billing_accounts', 'billing_plans', 'billing_invoices', 'billing_plan_requests'].some((name) => err.message.includes(name)))) return [];
+    if (err instanceof ApiError && (err.message.includes("Could not find the table") || err.message.includes('PGRST205') || ['metric_snapshots', 'automation_rules', 'automation_runs', 'billing_accounts', 'billing_plans', 'billing_invoices', 'billing_plan_requests', 'incident_events'].some((name) => err.message.includes(name)))) return [];
     throw err;
   }
+};
+
+const clamp = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
+
+const healthOf = (row: Row) => {
+  const reasons: string[] = [];
+  let score = 100;
+  const status = String(row.status || 'waiting');
+  const connection = String(row.connection_status ?? '').toLowerCase();
+  const cpu = Number(row.cpu_usage ?? row.cpuUsage ?? 0);
+  const memory = Number(row.memory_usage ?? row.memoryUsage ?? 0);
+  const storage = Number(row.storage_usage ?? row.storageUsage ?? 0);
+  const services = Array.isArray(row.services) ? row.services : [];
+  const offline = services.filter((service) => service?.status === 'offline').length;
+  const degraded = services.filter((service) => service?.status === 'degraded').length;
+  if (status === 'critical') { score -= 35; reasons.push('Server critical'); }
+  else if (status === 'warning') { score -= 18; reasons.push('Server warning'); }
+  else if (status === 'waiting') { score -= 10; reasons.push('Monitoring belum lengkap'); }
+  if (/unreachable|fetch failed|timeout|down|gagal/.test(connection)) { score -= 45; reasons.push('Proxmox unreachable'); }
+  if (cpu >= 90) { score -= 25; reasons.push('CPU critical'); }
+  else if (cpu >= 75) { score -= 10; reasons.push('CPU warning'); }
+  if (memory >= 90) { score -= 20; reasons.push('RAM critical'); }
+  else if (memory >= 80) { score -= 8; reasons.push('RAM warning'); }
+  if (storage >= 90) { score -= 25; reasons.push('Disk critical'); }
+  else if (storage >= 80) { score -= 10; reasons.push('Disk warning'); }
+  if (offline) { score -= Math.min(35, offline * 18); reasons.push(`${offline} service offline`); }
+  if (degraded) { score -= Math.min(18, degraded * 8); reasons.push(`${degraded} service degraded`); }
+  const healthScore = clamp(score);
+  return {
+    healthScore,
+    healthLevel: healthScore >= 85 ? 'healthy' : healthScore >= 60 ? 'warning' : 'critical',
+    riskReasons: reasons.length ? reasons : ['Tidak ada risk aktif'],
+  };
 };
 
 const mapServer = (row: Row) => ({
@@ -57,6 +90,7 @@ const mapServer = (row: Row) => ({
   backupStatus: row.backup_status ?? row.backupStatus ?? 'Not configured',
   sslStatus: row.ssl_status ?? row.sslStatus ?? 'Not checked',
   lastSeen: row.last_seen ?? row.lastSeen ?? row.last_check ?? 'Never',
+  ...healthOf(row),
   services: Array.isArray(row.services) ? row.services : [],
 });
 
@@ -115,6 +149,19 @@ const mapAutomationRun = (row: Row) => ({
   message: row.message ?? '-',
 });
 
+const mapIncidentEvent = (row: Row) => ({
+  id: String(row.id),
+  serverId: row.server_id ?? row.serverId ?? '',
+  serverName: row.server_name ?? row.serverName ?? row.server ?? '-',
+  incidentKey: row.incident_key ?? row.incidentKey ?? '',
+  severity: row.severity ?? 'information',
+  eventType: row.event_type ?? row.eventType ?? 'note',
+  title: row.title ?? 'Incident event',
+  detail: row.detail ?? '-',
+  actor: row.actor ?? 'Syncera',
+  occurredAt: row.occurred_at ?? row.occurredAt ?? row.created_at ?? '',
+});
+
 const mapBillingAccount = (row: Row) => ({
   id: String(row.id),
   companyName: row.company_name ?? row.companyName ?? '-',
@@ -168,7 +215,7 @@ const sortByNewest = (a: Row, b: Row) => String(b.started_at ?? b.created_at ?? 
 
 export default async function handler(_req: any, res: any) {
   try {
-    const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
+    const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots, incidentEvents] = await Promise.all([
       readTable('servers'),
       readTable('alerts'),
       readTable('automations'),
@@ -182,6 +229,7 @@ export default async function handler(_req: any, res: any) {
       readTable('backups'),
       readTable('support_tickets'),
       readOptionalTable('metric_snapshots'),
+      readOptionalTable('incident_events'),
     ]);
     return res.status(200).json({
       servers: servers.map(mapServer),
@@ -197,6 +245,10 @@ export default async function handler(_req: any, res: any) {
       backups,
       tickets,
       metricSnapshots: metricSnapshots.map(mapMetricSnapshot),
+      incidentEvents: incidentEvents
+        .sort((a, b) => String(b.occurred_at ?? b.created_at ?? '').localeCompare(String(a.occurred_at ?? a.created_at ?? '')))
+        .slice(0, 100)
+        .map(mapIncidentEvent),
       source: 'supabase',
     });
   } catch (err) {

@@ -81,6 +81,22 @@ create table if not exists notification_deliveries (
 
 create index if not exists notification_deliveries_channel_time_idx on notification_deliveries(channel_id, sent_at desc);
 
+create table if not exists incident_events (
+  id text primary key,
+  server_id text references servers(id) on delete set null,
+  server_name text not null default '-',
+  incident_key text not null,
+  severity text not null default 'information' check (severity in ('critical', 'warning', 'information')),
+  event_type text not null default 'note' check (event_type in ('detected', 'action', 'resolved', 'note')),
+  title text not null,
+  detail text not null default '-',
+  actor text not null default 'Syncera',
+  occurred_at timestamptz not null default now()
+);
+
+create index if not exists incident_events_time_idx on incident_events(occurred_at desc);
+create index if not exists incident_events_key_idx on incident_events(incident_key, occurred_at desc);
+
 create table if not exists automations (
   id text primary key,
   name text not null,
@@ -264,6 +280,7 @@ alter table alerts enable row level security;
 alter table metric_snapshots enable row level security;
 alter table notification_channels enable row level security;
 alter table notification_deliveries enable row level security;
+alter table incident_events enable row level security;
 alter table automations enable row level security;
 alter table automation_rules enable row level security;
 alter table automation_runs enable row level security;
@@ -290,6 +307,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read notification_deliveries" on notification_deliveries for select using (true);
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "public read incident_events" on incident_events for select using (true);
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "public read automations" on automations for select using (true);

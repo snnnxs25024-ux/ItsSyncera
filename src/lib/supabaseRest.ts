@@ -12,6 +12,7 @@ import {
   MetricSnapshot,
   ServerItem,
   SupportTicket,
+  IncidentEvent,
 } from '../types/dashboard';
 export interface DashboardData {
   servers: ServerItem[];
@@ -27,11 +28,12 @@ export interface DashboardData {
   backups: BackupItem[];
   tickets: SupportTicket[];
   metricSnapshots: MetricSnapshot[];
+  incidentEvents: IncidentEvent[];
   source: 'supabase' | 'mock';
   error?: string;
 }
 
-type TableName = 'servers' | 'alerts' | 'automations' | 'automation_rules' | 'automation_runs' | 'billing_accounts' | 'billing_plans' | 'billing_invoices' | 'billing_plan_requests' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots';
+type TableName = 'servers' | 'alerts' | 'automations' | 'automation_rules' | 'automation_runs' | 'billing_accounts' | 'billing_plans' | 'billing_invoices' | 'billing_plan_requests' | 'maintenances' | 'backups' | 'support_tickets' | 'metric_snapshots' | 'incident_events';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -50,6 +52,7 @@ const emptyData: DashboardData = {
   backups: [],
   tickets: [],
   metricSnapshots: [],
+  incidentEvents: [],
   source: 'supabase',
 };
 
@@ -100,6 +103,9 @@ const mapServer = (row: any): ServerItem => ({
   backupStatus: row.backup_status ?? row.backupStatus ?? 'Not configured',
   sslStatus: row.ssl_status ?? row.sslStatus ?? 'Not checked',
   lastSeen: row.last_seen ?? row.lastSeen ?? row.last_check ?? 'Never',
+  healthScore: Number(row.health_score ?? row.healthScore ?? 100),
+  healthLevel: row.health_level ?? row.healthLevel ?? 'healthy',
+  riskReasons: Array.isArray(row.risk_reasons) ? row.risk_reasons : Array.isArray(row.riskReasons) ? row.riskReasons : [],
   services: Array.isArray(row.services) ? row.services : [],
 });
 
@@ -156,6 +162,19 @@ const mapAutomationRun = (row: any): AutomationRun => ({
   startedAt: row.started_at ?? row.startedAt ?? '-',
   finishedAt: row.finished_at ?? row.finishedAt ?? '-',
   message: row.message ?? '-',
+});
+
+const mapIncidentEvent = (row: any): IncidentEvent => ({
+  id: String(row.id),
+  serverId: row.server_id ?? row.serverId ?? '',
+  serverName: row.server_name ?? row.serverName ?? row.server ?? '-',
+  incidentKey: row.incident_key ?? row.incidentKey ?? '',
+  severity: row.severity ?? 'information',
+  eventType: row.event_type ?? row.eventType ?? 'note',
+  title: row.title ?? 'Incident event',
+  detail: row.detail ?? '-',
+  actor: row.actor ?? 'Syncera',
+  occurredAt: row.occurred_at ?? row.occurredAt ?? row.created_at ?? '',
 });
 
 const mapBillingAccount = (row: any): BillingAccount => ({
@@ -216,7 +235,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
   }
 
   try {
-    const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots] = await Promise.all([
+    const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots, incidentEvents] = await Promise.all([
       readTable<any>('servers'),
       readTable<any>('alerts'),
       readTable<any>('automations'),
@@ -230,6 +249,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
       readTable<BackupItem>('backups'),
       readTable<SupportTicket>('support_tickets'),
       readOptionalTable<any>('metric_snapshots'),
+      readOptionalTable<any>('incident_events'),
     ]);
 
     return {
@@ -246,6 +266,7 @@ export const fetchDashboardData = async (): Promise<DashboardData> => {
       backups,
       tickets,
       metricSnapshots: metricSnapshots.map(mapMetricSnapshot),
+      incidentEvents: incidentEvents.map(mapIncidentEvent),
       source: 'supabase',
     };
   } catch (err) {

@@ -25,6 +25,11 @@ const connectionLabel = (type?: ConnectionType) =>
   type === 'ssh' ? 'SSH Key Connector' :
   'Linux/VPS Agent';
 
+const healthClass = (level?: ServerItem['healthLevel']) =>
+  level === 'critical' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+  level === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+  'bg-emerald-50 text-emerald-700 border border-emerald-200';
+
 export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServer, onSelectServer, onRefreshServers }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -243,7 +248,11 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                 <p className="text-xs text-slate-500 font-mono mt-1">IP: {selectedServer.ipAddress} • {selectedServer.provider}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+              <div className={`p-2.5 ${healthClass(selectedServer.healthLevel)}`}>
+                <span className="text-[10px] block uppercase">Health Score</span>
+                <span className="font-bold block">{selectedServer.healthScore ?? 100}/100</span>
+              </div>
               <div className="p-2.5 bg-sky-50/50 border border-sky-100">
                 <span className="text-[10px] text-slate-500 block">Connection Type</span>
                 <span className="font-bold text-slate-900">{connectionLabel(selectedServer.connectionType as ConnectionType)}</span>
@@ -264,6 +273,15 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
               <span className="font-bold uppercase">Connection Status:</span> {selectedServer.connectionStatus}
             </div>
           )}
+
+          <div className="p-4 bg-white border border-sky-200 text-slate-700 font-mono text-xs">
+            <span className="font-bold uppercase text-slate-900">Risk Detector:</span>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {(selectedServer.riskReasons || ['Tidak ada risk aktif']).map((reason) => (
+                <span key={reason} className="px-2 py-1 bg-sky-50 border border-sky-100 text-slate-700">{reason}</span>
+              ))}
+            </div>
+          </div>
 
           {/* System Information Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -734,6 +752,7 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
             <thead className="bg-sky-50/70 border-b border-sky-200 text-slate-600 text-[10px] uppercase">
               <tr>
                 <th className="p-4">Server Name</th>
+                <th className="p-4">Health</th>
                 <th className="p-4">Status</th>
                 <th className="p-4">Connection Type</th>
                 <th className="p-4">IP / Domain</th>
@@ -751,6 +770,11 @@ export const ServersView: React.FC<ServersViewProps> = ({ servers, selectedServe
                   <td className="p-4 font-bold text-slate-900 flex items-center space-x-2.5">
                     <Server className="w-4 h-4 text-sky-600" />
                     <span>{srv.name}</span>
+                  </td>
+                  <td className="p-4">
+                    <span className={`inline-flex items-center px-2 py-0.5 text-[10px] uppercase font-bold ${healthClass(srv.healthLevel)}`}>
+                      {srv.healthScore ?? 100}/100
+                    </span>
                   </td>
                   <td className="p-4">
                     <span className={`inline-flex items-center px-2 py-0.5 text-[10px] uppercase font-bold ${statusClass(srv.status)}`}>

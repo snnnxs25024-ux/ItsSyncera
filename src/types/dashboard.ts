@@ -3,6 +3,7 @@ export type DashboardTab =
   | 'servers' 
   | 'monitoring' 
   | 'alerts' 
+  | 'incidents'
   | 'automation' 
   | 'maintenance' 
   | 'backup' 
@@ -30,6 +31,9 @@ export interface ServerItem {
   backupStatus?: string;
   sslStatus?: string;
   lastSeen?: string;
+  healthScore?: number;
+  healthLevel?: 'healthy' | 'warning' | 'critical';
+  riskReasons?: string[];
   services: {
     name: string;
     status: 'online' | 'degraded' | 'offline';
@@ -90,6 +94,19 @@ export interface AutomationRun {
   startedAt: string;
   finishedAt: string;
   message: string;
+}
+
+export interface IncidentEvent {
+  id: string;
+  serverId: string;
+  serverName: string;
+  incidentKey: string;
+  severity: 'critical' | 'warning' | 'information';
+  eventType: 'detected' | 'action' | 'resolved' | 'note';
+  title: string;
+  detail: string;
+  actor: string;
+  occurredAt: string;
 }
 
 export interface BillingAccount {

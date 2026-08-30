@@ -18,6 +18,7 @@ const serverPatches: any[] = [];
 const alertBodies: any[] = [];
 const runBodies: any[] = [];
 const deliveryBodies: any[] = [];
+const incidentBodies: any[] = [];
 
 (globalThis as any).fetch = async (input: unknown, init: any = {}) => {
   const url = String(input);
@@ -28,6 +29,7 @@ const deliveryBodies: any[] = [];
   if (url.includes('/rest/v1/notification_channels?id=') && method === 'PATCH') return new Response(null, { status: 204 });
   if (url.includes('/rest/v1/notification_deliveries') && method === 'POST') { deliveryBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   if (url.includes('/rest/v1/alerts') && method === 'POST') { alertBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
+  if (url.includes('/rest/v1/incident_events') && method === 'POST') { incidentBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   if (url.includes('/rest/v1/automation_runs') && method === 'POST') { const body = JSON.parse(init.body); runBodies.push(body); return new Response(JSON.stringify([body]), { status: 201 }); }
   if (url.includes('/api2/json/')) throw new Error('connect ECONNREFUSED');
   throw new Error(`unexpected fetch ${method} ${url}`);
@@ -51,6 +53,7 @@ assert.equal(serverPatches[0].status, 'critical');
 assert.match(serverPatches[0].connection_status, /Proxmox unreachable/);
 assert.equal(alertBodies.flat()[0].title, 'Proxmox unreachable di PVE Jakarta');
 assert.equal(alertBodies.flat()[0].severity, 'critical');
+assert.equal(incidentBodies.flat()[0].event_type, 'detected');
 assert.equal(mails[0].subject, '[Syncera Alert] 1 alert di PVE Jakarta');
 assert.equal(deliveryBodies[0].status, 'sent');
 console.log('automation unreachable ok');

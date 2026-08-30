@@ -17,6 +17,7 @@ const server = {
 const alertBodies: any[] = [];
 const deliveryBodies: any[] = [];
 const channelPatches: any[] = [];
+const incidentBodies: any[] = [];
 
 (globalThis as any).fetch = async (input: unknown, init: any = {}) => {
   const url = String(input);
@@ -29,6 +30,7 @@ const channelPatches: any[] = [];
   if (url.includes('/rest/v1/metric_snapshots')) return new Response('', { status: 201 });
   if (url.includes('/rest/v1/automation_runs')) return new Response(init.body || '[]', { status: 201 });
   if (url.includes('/rest/v1/alerts') && method === 'POST') { alertBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
+  if (url.includes('/rest/v1/incident_events') && method === 'POST') { incidentBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   if (url.includes('/rest/v1/alerts') && method === 'PATCH') return new Response('', { status: 204 });
   if (url.endsWith('/api2/json/version')) return new Response(JSON.stringify({ data: { version: '9.2.10' } }), { status: 200 });
   if (url.endsWith('/api2/json/nodes')) return new Response(JSON.stringify({ data: [{ node: 'pve' }] }), { status: 200 });
@@ -64,4 +66,5 @@ assert.match(mails[0].body, /CPU tinggi di PVE Jakarta/);
 assert.match(mails[0].body, /VM\/CT offline di PVE Jakarta/);
 assert.equal(channelPatches.length, 1);
 assert.equal(deliveryBodies.length, 1);
+assert.equal(incidentBodies.flat().length, 4);
 console.log('automation alert ok');

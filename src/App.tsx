@@ -26,6 +26,7 @@ const initialDashboardData: DashboardData = {
   backups: [],
   tickets: [],
   metricSnapshots: [],
+  incidentEvents: [],
   source: 'supabase',
 };
 
@@ -88,6 +89,7 @@ export default function App() {
         backups={dashboardData.backups}
         tickets={dashboardData.tickets}
         metricSnapshots={dashboardData.metricSnapshots}
+        incidentEvents={dashboardData.incidentEvents}
         onRefreshData={loadDashboardData}
         onLogout={async () => {
           await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);

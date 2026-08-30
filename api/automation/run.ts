@@ -360,6 +360,31 @@ const touchChannel = async (channel: Row) => {
   await res.text();
 };
 
+const insertIncidentEvents = async (rows: Row[]) => {
+  if (!rows.length) return;
+  const res = await fetch(`${baseUrl}/rest/v1/incident_events`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify(rows),
+  });
+  const body = await res.text();
+  // ponytail: optional table during rollout; remove swallow after all tenants migrated.
+  if (!res.ok && !body.includes('Could not find the table') && !body.includes('PGRST205')) throw new ApiError(502, `incident_events insert: ${res.status} ${body.slice(0, 160)}`.trim());
+};
+
+const incidentEvent = (server: Row, kind: string, title: string, severity: string, detail: string): Row => ({
+  id: `incident-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${kind}-${Date.now().toString(36)}`,
+  server_id: String(server.id),
+  server_name: server.name || 'Proxmox server',
+  incident_key: `proxmox-${kind}-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}`,
+  severity,
+  event_type: 'detected',
+  title,
+  detail,
+  actor: 'Syncera',
+  occurred_at: nowIso(),
+});
+
 const sendServerAlertEmails = async (server: Row, alerts: Row[]) => {
   const channels = (await readOptionalTable('notification_channels')).filter((channel) =>
     channel.channel === 'email' && channel.enabled !== false && String(channel.server_id) === String(server.id)
@@ -437,6 +462,7 @@ const upsertProxmoxUnreachableAlert = async (server: Row, reason: string) => {
   });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `alerts unreachable upsert: ${res.status} ${body.slice(0, 160)}`.trim());
+  await insertIncidentEvents([incidentEvent(server, 'unreachable', row.title, 'critical', `Gejala: Proxmox/API tidak bisa dihubungi. Error: ${reason.slice(0, 180)}. Tindakan: server ditandai critical, alert dibuat, email dikirim jika channel aktif.`)]);
   await sendServerAlertEmails(server, [row]);
   return [row];
 };
@@ -485,6 +511,7 @@ const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `alerts upsert: ${res.status} ${body.slice(0, 160)}`.trim());
+  await insertIncidentEvents(rows.map((row) => incidentEvent(server, String(row.id).replace(alertId(server, ''), ''), row.title, row.severity, `Gejala: ${row.title}. CPU ${metrics.cpuUsage ?? 0}% · RAM ${metrics.memoryUsage ?? 0}% · Disk ${metrics.storageUsage ?? 0}% · VM/CT offline ${offline.length}. Tindakan: alert dibuat; aksi risky tidak dijalankan.`)));
   await sendServerAlertEmails(server, rows);
   return rows;
 };

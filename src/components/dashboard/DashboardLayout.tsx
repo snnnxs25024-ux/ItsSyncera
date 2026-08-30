@@ -3,12 +3,13 @@ import {
   Server, Activity, AlertTriangle, RefreshCw, ShieldCheck,
   HardDrive, FileText, CreditCard, LifeBuoy, Settings, LogOut, Menu, X, Bell, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, BillingAccount, BillingInvoice, BillingPlan, BillingPlanRequest, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot } from '../../types/dashboard';
+import { DashboardTab, ServerItem, AlertItem, AutomationItem, AutomationRule, AutomationRun, BillingAccount, BillingInvoice, BillingPlan, BillingPlanRequest, MaintenanceItem, BackupItem, SupportTicket, MetricSnapshot, IncidentEvent } from '../../types/dashboard';
 import { BrandLogo } from '../BrandLogo';
 import { OverviewView } from './views/OverviewView';
 import { ServersView } from './views/ServersView';
 import { MonitoringView } from './views/MonitoringView';
 import { AlertsView } from './views/AlertsView';
+import { IncidentsView } from './views/IncidentsView';
 import { AutomationView } from './views/AutomationView';
 import { MaintenanceView } from './views/MaintenanceView';
 import { BackupView } from './views/BackupView';
@@ -31,6 +32,7 @@ interface DashboardLayoutProps {
   backups: BackupItem[];
   tickets: SupportTicket[];
   metricSnapshots: MetricSnapshot[];
+  incidentEvents: IncidentEvent[];
   onRefreshData: () => void;
   onLogout: () => void;
 }
@@ -49,6 +51,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   backups,
   tickets,
   metricSnapshots,
+  incidentEvents,
   onRefreshData,
   onLogout
 }) => {
@@ -85,6 +88,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     { id: 'servers' as DashboardTab, label: 'Servers', icon: Server },
     { id: 'monitoring' as DashboardTab, label: 'Monitoring', icon: RefreshCw },
     { id: 'alerts' as DashboardTab, label: 'Alerts', icon: AlertTriangle, badge: alerts.filter(a => a.status === 'Monitoring').length },
+    { id: 'incidents' as DashboardTab, label: 'Incidents', icon: FileText, badge: incidentEvents.filter((item) => item.eventType === 'detected').length },
     { id: 'automation' as DashboardTab, label: 'Automation', icon: ShieldCheck },
     { id: 'maintenance' as DashboardTab, label: 'Maintenance', icon: HardDrive },
     { id: 'backup' as DashboardTab, label: 'Backup', icon: HardDrive },
@@ -256,6 +260,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           )}
           {currentTab === 'monitoring' && <MonitoringView servers={servers} metricSnapshots={metricSnapshots} />}
           {currentTab === 'alerts' && <AlertsView alerts={alerts} />}
+          {currentTab === 'incidents' && <IncidentsView incidents={incidentEvents} alerts={alerts} automationRuns={automationRuns} />}
           {currentTab === 'automation' && <AutomationView automations={automations} automationRules={automationRules} automationRuns={automationRuns} servers={servers} onRefreshData={onRefreshData} />}
           {currentTab === 'maintenance' && <MaintenanceView maintenances={maintenances} />}
           {currentTab === 'backup' && <BackupView backups={backups} />}

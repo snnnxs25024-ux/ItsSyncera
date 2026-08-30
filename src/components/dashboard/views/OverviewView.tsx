@@ -26,7 +26,6 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
   const primaryServer = servers[0];
   const latestBackup = backups[0];
   const overallStatus = servers.length === 0 ? 'Belum Ada Data' : criticalSignalCount > 0 ? 'Perlu Tindakan' : warningSignalCount > 0 ? 'Perlu Perhatian' : 'Aman';
-  const overallTone = servers.length === 0 ? 'bg-slate-600' : criticalSignalCount > 0 ? 'bg-rose-600' : warningSignalCount > 0 ? 'bg-amber-500' : 'bg-emerald-600';
   const backupStatus = primaryServer?.backupStatus || (latestBackup ? `${latestBackup.status} • ${latestBackup.date}` : 'Belum ada backup terdeteksi');
   const backupDetail = latestBackup ? `${latestBackup.server} • ${latestBackup.size}` : 'Diambil dari Proxmox storage/tasks.';
   const sslStatus = primaryServer?.sslStatus || 'Belum dicek';
@@ -40,8 +39,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
   const avgCpu = avgOf('cpuUsage');
   const avgMemory = avgOf('memoryUsage');
   const avgStorage = avgOf('storageUsage');
+  const avgHealthScore = servers.length
+    ? Math.round(servers.reduce((acc, s) => acc + Number(s.healthScore ?? 100), 0) / servers.length)
+    : null;
+  const healthTone = avgHealthScore === null ? 'bg-slate-600' : avgHealthScore >= 85 ? 'bg-emerald-600' : avgHealthScore >= 60 ? 'bg-amber-500' : 'bg-rose-600';
   const riskServers = servers
-    .filter(s => s.status !== 'active' || s.cpuUsage > 80 || s.memoryUsage > 85 || s.storageUsage > 80)
+    .filter(s => (s.healthScore ?? 100) < 85 || s.status !== 'active' || s.cpuUsage > 80 || s.memoryUsage > 85 || s.storageUsage > 80)
     .slice(0, 3);
   const riskAlerts = activeAlerts.slice(0, 3);
 
@@ -78,14 +81,14 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
 
       {/* Decision Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className={`border p-4 shadow-xs text-white ${overallTone}`}>
+        <div className={`border p-4 shadow-xs text-white ${healthTone}`}>
           <div className="flex items-center justify-between mb-3">
-            <span className="font-mono text-[10px] uppercase tracking-widest font-semibold opacity-90">Overall Status</span>
+            <span className="font-mono text-[10px] uppercase tracking-widest font-semibold opacity-90">Health Score</span>
             <ShieldCheck className="w-5 h-5" />
           </div>
-          <div className="text-2xl font-mono font-bold uppercase">{overallStatus}</div>
+          <div className="text-3xl font-mono font-bold uppercase">{avgHealthScore === null ? 'N/A' : `${avgHealthScore}/100`}</div>
           <p className="text-[11px] font-sans mt-2 opacity-90">
-            {criticalSignalCount > 0 ? 'Ada sinyal critical yang butuh follow-up.' : warningSignalCount > 0 ? 'Ada warning aktif, layanan tetap berjalan.' : 'Semua server terpantau normal.'}
+            {overallStatus}: {criticalSignalCount > 0 ? 'Ada sinyal critical yang butuh follow-up.' : warningSignalCount > 0 ? 'Ada warning aktif, layanan tetap berjalan.' : 'Semua server terpantau normal.'}
           </p>
         </div>
 
@@ -262,10 +265,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({ servers, alerts, bac
                   <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 ${srv.status === 'critical' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>{srv.status}</span>
                 </div>
                 <p className="text-[11px] text-slate-600 font-sans">
-                  CPU {srv.cpuUsage}% • RAM {srv.memoryUsage}% • Disk {srv.storageUsage}%
+                  Score {srv.healthScore ?? 100}/100 • CPU {srv.cpuUsage}% • RAM {srv.memoryUsage}% • Disk {srv.storageUsage}%
                 </p>
                 <p className="text-[10px] text-slate-500 font-sans">
-                  Rekomendasi: cek service, bersihkan log/cache, jadwalkan optimasi resource.
+                  {(srv.riskReasons || []).slice(0, 2).join(' • ') || 'Rekomendasi: cek service, bersihkan log/cache, jadwalkan optimasi resource.'}
                 </p>
                 <button
                   onClick={() => {

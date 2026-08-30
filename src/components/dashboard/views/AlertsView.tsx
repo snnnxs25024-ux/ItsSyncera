@@ -58,9 +58,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({ alerts }) => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-sky-200 p-6 shadow-xs">
         <div>
-          <span className="font-mono text-[10px] text-sky-600 uppercase tracking-widest font-semibold block mb-1">Incident Management</span>
+          <span className="font-mono text-[10px] text-sky-600 uppercase tracking-widest font-semibold block mb-1">Risk Detector</span>
           <h1 className="text-xl font-mono font-bold uppercase tracking-wide text-slate-900">Alert Center</h1>
-          <p className="text-xs text-slate-500 font-sans mt-1">Pusat masalah aktif, dampak client, tindakan SRE, dan status penyelesaian.</p>
+          <p className="text-xs text-slate-500 font-sans mt-1">Pusat risk aktif, dampak client, tindakan SRE, dan status penyelesaian.</p>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto max-w-full">
           {filterOptions.map((filter) => (
