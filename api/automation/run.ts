@@ -304,6 +304,21 @@ const insertMetricSnapshot = async (server: Row, metrics: Row) => {
   if (!res.ok) throw new ApiError(502, `metric_snapshots insert: ${res.status} ${body.slice(0, 160)}`.trim());
 };
 
+const patchServerUnreachable = async (server: Row, reason: string) => {
+  const res = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(String(server.id))}`, {
+    method: 'PATCH',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify({
+      status: 'critical',
+      connection_status: `Proxmox unreachable · ${reason.slice(0, 140)}`,
+      last_check: nowLabel(),
+      updated_at: nowIso(),
+    }),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(502, `servers unreachable update: ${res.status} ${body.slice(0, 160)}`.trim());
+};
+
 const alertId = (server: Row, kind: string) => `alert-proxmox-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${kind}`;
 
 const severityRank = (value: string) => value === 'critical' ? 3 : value === 'warning' ? 2 : 1;
@@ -404,6 +419,44 @@ const sendNotificationTest = async (serverId: string) => {
   return { server: server.name || 'Server', sent };
 };
 
+const upsertProxmoxUnreachableAlert = async (server: Row, reason: string) => {
+  const name = server.name || 'Proxmox server';
+  const row = {
+    id: alertId(server, 'unreachable'),
+    severity: 'critical',
+    title: `Proxmox unreachable di ${name}`,
+    server: name,
+    detected_at: nowLabel(),
+    status: 'Monitoring',
+    action_taken: `Auto-created by Proxmox reachability check; no risky action executed. Error: ${reason.slice(0, 180)}`,
+  };
+  const res = await fetch(`${baseUrl}/rest/v1/alerts?on_conflict=id`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify([row]),
+  });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(502, `alerts unreachable upsert: ${res.status} ${body.slice(0, 160)}`.trim());
+  await sendServerAlertEmails(server, [row]);
+  return [row];
+};
+
+const recordProxmoxFailure = async (server: Row, err: unknown, automationName: string) => {
+  const reason = err instanceof Error ? err.message : 'error';
+  await patchServerUnreachable(server, reason);
+  await upsertProxmoxUnreachableAlert(server, reason);
+  return insertRunRow({
+    id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    automation_id: null,
+    automation_name: automationName,
+    target_server: server.name || 'Proxmox server',
+    status: 'failed',
+    started_at: nowIso(),
+    finished_at: nowIso(),
+    message: `Proxmox health gagal: ${reason}`,
+  });
+};
+
 const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   const name = server.name || 'Proxmox server';
   const services = Array.isArray(metrics.services) ? metrics.services : [];
@@ -491,20 +544,24 @@ const proxmoxAutomationMessage = (serverName: string, metrics: Row) =>
 
 const executeProxmoxHealth = async (serverId?: string) => {
   const server = findProxmoxServer(await readOptionalTable('servers'), serverId);
-  const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
-  await patchServerHealth(server, metrics);
-  await insertMetricSnapshot(server, metrics);
-  await upsertProxmoxAlerts(server, metrics);
-  return insertRunRow({
-    id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
-    automation_id: null,
-    automation_name: 'Proxmox Health Check',
-    target_server: server.name || 'Proxmox server',
-    status: 'success',
-    started_at: nowIso(),
-    finished_at: nowIso(),
-    message: proxmoxAutomationMessage(server.name || 'Proxmox server', metrics),
-  });
+  try {
+    const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
+    await patchServerHealth(server, metrics);
+    await insertMetricSnapshot(server, metrics);
+    await upsertProxmoxAlerts(server, metrics);
+    return insertRunRow({
+      id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+      automation_id: null,
+      automation_name: 'Proxmox Health Check',
+      target_server: server.name || 'Proxmox server',
+      status: 'success',
+      started_at: nowIso(),
+      finished_at: nowIso(),
+      message: proxmoxAutomationMessage(server.name || 'Proxmox server', metrics),
+    });
+  } catch (err) {
+    return recordProxmoxFailure(server, err, 'Proxmox Health Check');
+  }
 };
 
 export default async function handler(req: any, res: any) {
@@ -537,16 +594,7 @@ export default async function handler(req: any, res: any) {
               message: proxmoxAutomationMessage(server.name || 'Proxmox server', metrics),
             }));
           } catch (err) {
-            results.push({
-              id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
-              automation_id: null,
-              automation_name: 'Proxmox Auto Health Check',
-              target_server: server.name || 'Proxmox server',
-              status: 'failed',
-              started_at: nowIso(),
-              finished_at: nowIso(),
-              message: `Proxmox health gagal: ${err instanceof Error ? err.message : 'error'}`,
-            } as Row);
+            results.push(await recordProxmoxFailure(server, err, 'Proxmox Auto Health Check'));
           }
         }
         return res.status(200).json({ success: true, cron: true, checkedAt: nowIso(), results });
