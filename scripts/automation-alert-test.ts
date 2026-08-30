@@ -4,7 +4,6 @@ process.env.SUPABASE_URL = 'https://supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
 process.env.SMTP_USER = 'alerts@syncera.test';
 process.env.SMTP_PASS = 'secret';
-process.env.ALERT_EMAIL_TO = 'owner@syncera.test';
 process.env.SMTP_TEST_CAPTURE = '1';
 
 const server = {
@@ -16,12 +15,17 @@ const server = {
   proxmox_port: '8006',
 };
 const alertBodies: any[] = [];
+const deliveryBodies: any[] = [];
+const channelPatches: any[] = [];
 
 (globalThis as any).fetch = async (input: unknown, init: any = {}) => {
   const url = String(input);
   const method = String(init.method || 'GET').toUpperCase();
   if (url.includes('/rest/v1/servers?select=')) return new Response(JSON.stringify([server]), { status: 200 });
   if (url.includes('/rest/v1/servers?id=')) return new Response('[]', { status: 200 });
+  if (url.includes('/rest/v1/notification_channels?select=')) return new Response(JSON.stringify([{ id: 'chan-1', server_id: 'srv-pve', channel: 'email', recipient: 'client@syncera.test', enabled: true, severity_filter: 'all', cooldown_minutes: 60 }]), { status: 200 });
+  if (url.includes('/rest/v1/notification_channels?id=') && method === 'PATCH') { channelPatches.push(JSON.parse(init.body)); return new Response('', { status: 204 }); }
+  if (url.includes('/rest/v1/notification_deliveries') && method === 'POST') { deliveryBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   if (url.includes('/rest/v1/metric_snapshots')) return new Response('', { status: 201 });
   if (url.includes('/rest/v1/automation_runs')) return new Response(init.body || '[]', { status: 201 });
   if (url.includes('/rest/v1/alerts') && method === 'POST') { alertBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
@@ -54,7 +58,10 @@ assert.deepEqual(titles, [
 ].sort());
 const mails = (globalThis as any).__sentMails || [];
 assert.equal(mails.length, 1);
+assert.deepEqual(mails[0].to, ['client@syncera.test']);
 assert.equal(mails[0].subject, '[Syncera Alert] 4 alert di PVE Jakarta');
 assert.match(mails[0].body, /CPU tinggi di PVE Jakarta/);
 assert.match(mails[0].body, /VM\/CT offline di PVE Jakarta/);
+assert.equal(channelPatches.length, 1);
+assert.equal(deliveryBodies.length, 1);
 console.log('automation alert ok');

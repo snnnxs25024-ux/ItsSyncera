@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Play, RefreshCw, PauseCircle, Clock, ShieldAlert, Activity, ListChecks, History, Lock, Gauge, Server, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Play, RefreshCw, PauseCircle, Clock, ShieldAlert, Activity, ListChecks, History, Lock, Gauge, Server, AlertTriangle, Mail } from 'lucide-react';
 import { AutomationItem, AutomationRule, AutomationRun, ServerItem } from '../../../types/dashboard';
 
 interface AutomationViewProps {
@@ -11,6 +11,13 @@ interface AutomationViewProps {
 }
 
 type AutomationFilter = 'all' | 'active' | 'paused' | 'running';
+
+type NotificationChannelDraft = {
+  recipient: string;
+  enabled: boolean;
+  severityFilter: 'critical' | 'warning' | 'all';
+  cooldownMinutes: number;
+};
 
 const statusClass = (status: AutomationItem['status'] | AutomationRule['status'] | AutomationRun['status']) =>
   status === 'active' || status === 'success' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
@@ -60,6 +67,8 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
   const [runs, setRuns] = useState<AutomationRun[]>(automationRuns);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [proxmoxRunningId, setProxmoxRunningId] = useState<string | null>(null);
+  const [savingChannelId, setSavingChannelId] = useState<string | null>(null);
+  const [channelDrafts, setChannelDrafts] = useState<Record<string, NotificationChannelDraft>>({});
   const [message, setMessage] = useState<string>('');
   const filteredAutomations = automations.filter((automation) => matchesFilter(automation, selectedFilter));
   const activeCount = automations.filter((automation) => automation.status === 'active').length;
@@ -76,6 +85,50 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
   ];
 
   React.useEffect(() => setRuns(automationRuns), [automationRuns]);
+
+  React.useEffect(() => {
+    fetch('/api/notification-channels')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) return;
+        const next: Record<string, NotificationChannelDraft> = {};
+        for (const channel of data.channels || []) {
+          next[channel.serverId] = {
+            recipient: channel.recipient || '',
+            enabled: channel.enabled !== false,
+            severityFilter: channel.severityFilter || 'critical',
+            cooldownMinutes: Number(channel.cooldownMinutes || 60),
+          };
+        }
+        setChannelDrafts(next);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const draftFor = (serverId: string): NotificationChannelDraft => channelDrafts[serverId] || { recipient: '', enabled: true, severityFilter: 'critical', cooldownMinutes: 60 };
+  const updateDraft = (serverId: string, patch: Partial<NotificationChannelDraft>) => {
+    setChannelDrafts((current) => ({ ...current, [serverId]: { ...draftFor(serverId), ...patch } }));
+  };
+
+  const saveChannel = async (serverId: string) => {
+    setSavingChannelId(serverId);
+    setMessage('');
+    const draft = draftFor(serverId);
+    try {
+      const res = await fetch('/api/notification-channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serverId, ...draft }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || `HTTP ${res.status}`);
+      setMessage('Email alert server tersimpan.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Simpan email alert gagal');
+    } finally {
+      setSavingChannelId(null);
+    }
+  };
 
   const runAutomation = async (automation: AutomationItem) => {
     setRunningId(automation.id);
@@ -195,6 +248,51 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
                   {proxmoxRunningId === server.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                   <span>{proxmoxRunningId === server.id ? 'Running Health Check' : 'Run Health Check Now'}</span>
                 </button>
+                <div className="border-t border-sky-100 pt-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-mono text-[11px] font-bold uppercase text-slate-700 flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-sky-600" /> Email Alert</p>
+                    <label className="flex items-center gap-2 font-mono text-[10px] uppercase text-slate-500">
+                      <input type="checkbox" checked={draftFor(server.id).enabled} onChange={(event) => updateDraft(server.id, { enabled: event.target.checked })} />
+                      ON
+                    </label>
+                  </div>
+                  <input
+                    value={draftFor(server.id).recipient}
+                    onChange={(event) => updateDraft(server.id, { recipient: event.target.value })}
+                    placeholder="email-client@domain.com"
+                    className="w-full border border-sky-100 bg-white px-3 py-2 font-mono text-xs text-slate-700 outline-none focus:border-sky-400"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={draftFor(server.id).severityFilter}
+                      onChange={(event) => updateDraft(server.id, { severityFilter: event.target.value as NotificationChannelDraft['severityFilter'] })}
+                      className="border border-sky-100 bg-white px-2 py-2 font-mono text-[11px] text-slate-700 outline-none focus:border-sky-400"
+                    >
+                      <option value="critical">Critical only</option>
+                      <option value="warning">Warning + Critical</option>
+                      <option value="all">All alerts</option>
+                    </select>
+                    <select
+                      value={draftFor(server.id).cooldownMinutes}
+                      onChange={(event) => updateDraft(server.id, { cooldownMinutes: Number(event.target.value) })}
+                      className="border border-sky-100 bg-white px-2 py-2 font-mono text-[11px] text-slate-700 outline-none focus:border-sky-400"
+                    >
+                      <option value={30}>Cooldown 30m</option>
+                      <option value={60}>Cooldown 60m</option>
+                      <option value={120}>Cooldown 120m</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={savingChannelId === server.id}
+                    onClick={() => saveChannel(server.id)}
+                    className="w-full px-3 py-2 bg-white hover:bg-sky-50 disabled:bg-slate-100 border border-sky-200 text-sky-700 font-mono text-[11px] uppercase font-bold flex items-center justify-center gap-2"
+                  >
+                    {savingChannelId === server.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                    <span>{savingChannelId === server.id ? 'Saving' : 'Save Email Alert'}</span>
+                  </button>
+                  <p className="font-mono text-[10px] text-slate-500">Anti-spam: kirim hanya sesuai severity + cooldown.</p>
+                </div>
               </article>
             ))}
           </div>
@@ -214,14 +312,14 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
               <Clock className="w-4 h-4 text-sky-600" />
               <span>Scheduled Auto Health Check</span>
             </h2>
-            <p className="text-xs text-slate-500 font-sans mt-1">Berjalan otomatis via Vercel Cron tanpa perlu klik manual.</p>
+            <p className="text-xs text-slate-500 font-sans mt-1">Berjalan otomatis via Supabase pg_cron tanpa perlu klik manual.</p>
           </div>
           <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono text-[10px] uppercase font-bold">30 menit</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           {[
             ['Interval', 'Setiap 30 menit'],
-            ['Trigger', 'Vercel Cron → /api/automation/run'],
+            ['Trigger', 'Supabase pg_cron → /api/automation/run'],
             ['Aksi', 'Health check + sync VM/CT + update metrics + snapshot + alert'],
             ['Scope', `Semua Proxmox connected (${proxmoxServers.length})`],
           ].map(([label, value]) => (
@@ -231,7 +329,7 @@ export const AutomationView: React.FC<AutomationViewProps> = ({ automations, aut
             </div>
           ))}
         </div>
-        <p className="font-mono text-[11px] text-slate-500">Jadwal cron terdaftar di <code className="bg-sky-50 px-1">vercel.json</code> <span className="font-mono">*/30 * * * *</span>. Hasil tiap run tercatat di Run History di bawah.</p>
+        <p className="font-mono text-[11px] text-slate-500">Jadwal cron terdaftar di Supabase SQL Editor: <span className="font-mono">*/30 * * * *</span>. Hasil tiap run tercatat di Run History di bawah.</p>
       </div>
 
       <div className="bg-white border border-sky-200 p-6 shadow-xs space-y-4">

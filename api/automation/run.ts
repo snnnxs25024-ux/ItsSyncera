@@ -32,29 +32,27 @@ const emailAddress = (value: string) => value.match(/<([^>]+)>/)?.[1]?.trim() ||
 const alertEmailConfig = () => {
   const user = String(process.env.SMTP_USER || '').trim();
   const pass = String(process.env.SMTP_PASS || '').trim();
-  const to = String(process.env.ALERT_EMAIL_TO || process.env.SMTP_TO || '').split(',').map((item) => item.trim()).filter(Boolean);
-  if (!user || !pass || !to.length) return null;
+  if (!user || !pass) return null;
   return {
     host: String(process.env.SMTP_HOST || 'smtp.hostinger.com').trim(),
     port: Number(process.env.SMTP_PORT || 465),
     user,
     pass,
     from: String(process.env.SMTP_FROM || `It's Syncera <${user}>`).trim(),
-    to,
   };
 };
 
-const sendSmtpMail = async (subject: string, body: string) => {
+const sendSmtpMail = async (to: string[], subject: string, body: string) => {
   const config = alertEmailConfig();
-  if (!config) return false;
+  if (!config || !to.length) return false;
   if (process.env.SMTP_TEST_CAPTURE === '1') {
-    (globalThis as any).__sentMails = [...((globalThis as any).__sentMails || []), { subject, body, to: config.to }];
+    (globalThis as any).__sentMails = [...((globalThis as any).__sentMails || []), { subject, body, to }];
     return true;
   }
   const envelopeFrom = emailAddress(config.from);
   const message = [
     `From: ${config.from}`,
-    `To: ${config.to.join(', ')}`,
+    `To: ${to.join(', ')}`,
     `Subject: ${subject.replace(/[\r\n]/g, ' ')}`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=UTF-8',
@@ -97,7 +95,7 @@ const sendSmtpMail = async (subject: string, body: string) => {
         await send(Buffer.from(config.user).toString('base64'), /^334/m);
         await send(Buffer.from(config.pass).toString('base64'), /^235/m);
         await send(`MAIL FROM:<${envelopeFrom}>`, /^250/m);
-        for (const target of config.to) await send(`RCPT TO:<${emailAddress(target)}>`, /^25[01]/m);
+        for (const target of to) await send(`RCPT TO:<${emailAddress(target)}>`, /^25[01]/m);
         await send('DATA', /^354/m);
         await send(`${message}\r\n.`, /^250/m);
         socket.write('QUIT\r\n');
@@ -124,7 +122,7 @@ const readOptionalTable = async (table: string) => {
   try {
     return await readTable(table);
   } catch (err) {
-    if (err instanceof ApiError && err.message.includes('Could not find the table')) return [];
+    if (err instanceof ApiError && (err.message.includes('Could not find the table') || err.message.includes('PGRST205'))) return [];
     throw err;
   }
 };
@@ -263,6 +261,74 @@ const insertMetricSnapshot = async (server: Row, metrics: Row) => {
 
 const alertId = (server: Row, kind: string) => `alert-proxmox-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${kind}`;
 
+const severityRank = (value: string) => value === 'critical' ? 3 : value === 'warning' ? 2 : 1;
+const channelAllowsAlert = (channel: Row, alert: Row) => {
+  const filter = String(channel.severity_filter || 'critical');
+  if (filter === 'all') return true;
+  return severityRank(String(alert.severity)) >= severityRank(filter);
+};
+const recipientsOf = (recipient: unknown) => String(recipient || '').split(',').map((item) => item.trim()).filter(Boolean);
+const inCooldown = (channel: Row) => {
+  if (!channel.last_sent_at) return false;
+  const cooldownMs = Math.max(15, Number(channel.cooldown_minutes || 60)) * 60_000;
+  return Date.now() - new Date(channel.last_sent_at).getTime() < cooldownMs;
+};
+
+const insertDelivery = async (channel: Row, alerts: Row[], status: string, message: string) => {
+  const row = {
+    id: `delivery-${String(channel.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    channel_id: String(channel.id),
+    alert_ids: alerts.map((alert) => String(alert.id)),
+    recipient: String(channel.recipient || '-'),
+    status,
+    message: message.slice(0, 500),
+  };
+  const res = await fetch(`${baseUrl}/rest/v1/notification_deliveries`, {
+    method: 'POST',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify(row),
+  });
+  await res.text();
+};
+
+const touchChannel = async (channel: Row) => {
+  const res = await fetch(`${baseUrl}/rest/v1/notification_channels?id=eq.${encodeURIComponent(String(channel.id))}`, {
+    method: 'PATCH',
+    headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+    body: JSON.stringify({ last_sent_at: nowIso(), updated_at: nowIso() }),
+  });
+  await res.text();
+};
+
+const sendServerAlertEmails = async (server: Row, alerts: Row[]) => {
+  const channels = (await readOptionalTable('notification_channels')).filter((channel) =>
+    channel.channel === 'email' && channel.enabled !== false && String(channel.server_id) === String(server.id)
+  );
+  for (const channel of channels) {
+    const allowed = alerts.filter((alert) => channelAllowsAlert(channel, alert));
+    if (!allowed.length) continue;
+    if (inCooldown(channel)) {
+      await insertDelivery(channel, allowed, 'skipped', 'cooldown active');
+      continue;
+    }
+    try {
+      const sent = await sendSmtpMail(
+        recipientsOf(channel.recipient),
+        `[Syncera Alert] ${allowed.length} alert di ${server.name || 'Proxmox server'}`,
+        allowed.map((row) => `${String(row.severity).toUpperCase()} — ${row.title}\nServer: ${row.server}\nStatus: ${row.status}\nAction: ${row.action_taken}`).join('\n\n'),
+      );
+      if (!sent) {
+        await insertDelivery(channel, allowed, 'failed', 'SMTP sender not configured');
+        continue;
+      }
+      await touchChannel(channel);
+      await insertDelivery(channel, allowed, 'sent', 'email sent');
+    } catch (err) {
+      await insertDelivery(channel, allowed, 'failed', err instanceof Error ? err.message : 'email failed');
+    }
+  }
+};
+
 const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   const name = server.name || 'Proxmox server';
   const services = Array.isArray(metrics.services) ? metrics.services : [];
@@ -291,14 +357,7 @@ const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `alerts upsert: ${res.status} ${body.slice(0, 160)}`.trim());
-  try {
-    await sendSmtpMail(
-      `[Syncera Alert] ${rows.length} alert di ${name}`,
-      rows.map((row) => `${String(row.severity).toUpperCase()} — ${row.title}\nServer: ${row.server}\nStatus: ${row.status}\nAction: ${row.action_taken}`).join('\n\n'),
-    );
-  } catch {
-    // ponytail: email failure must not block monitoring; add delivery log table when notification center exists.
-  }
+  await sendServerAlertEmails(server, rows);
   return rows;
 };
 
