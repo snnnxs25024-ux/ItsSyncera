@@ -12,6 +12,7 @@ const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'h
   .replace(/\/$/, '')
   .replace(/\/rest\/v1$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const headers = () => {
   if (!supabaseKey) throw new ApiError(500, 'SUPABASE key missing');
@@ -22,16 +23,49 @@ const headers = () => {
   };
 };
 
-const readTable = async (table: string) => {
-  const res = await fetch(`${baseUrl}/rest/v1/${table}?select=*`, { headers: headers() });
+const authHeaders = (token: string) => {
+  const key = supabaseAnonKey || supabaseKey;
+  if (!key) throw new ApiError(500, 'SUPABASE auth key missing');
+  return {
+    apikey: key,
+    Authorization: `Bearer ${decodeURIComponent(token)}`,
+    Accept: 'application/json',
+  };
+};
+
+const sessionToken = (cookieHeader = '') => cookieHeader
+  .split(';')
+  .map((part) => part.trim())
+  .find((part) => part.startsWith('syncera_session='))
+  ?.slice('syncera_session='.length);
+
+const readAuthUser = async (req: any) => {
+  const token = sessionToken(String(req.headers?.cookie || ''));
+  if (!token) throw new ApiError(401, 'Login wajib');
+  const res = await fetch(`${baseUrl}/auth/v1/user`, { headers: authHeaders(token) });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(401, 'Session tidak valid');
+  const user = JSON.parse(body || '{}');
+  if (!user.id) throw new ApiError(401, 'Session tidak valid');
+  return user as Row;
+};
+
+const tableUrl = (table: string, ownerUserId?: string) => {
+  const params = new URLSearchParams({ select: '*' });
+  if (ownerUserId) params.set('owner_user_id', `eq.${ownerUserId}`);
+  return `${baseUrl}/rest/v1/${table}?${params.toString()}`;
+};
+
+const readTable = async (table: string, ownerUserId?: string) => {
+  const res = await fetch(tableUrl(table, ownerUserId), { headers: headers() });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `${table}: ${res.status} ${body.slice(0, 160)}`.trim());
   return JSON.parse(body || '[]') as Row[];
 };
 
-const readOptionalTable = async (table: string) => {
+const readOptionalTable = async (table: string, ownerUserId?: string) => {
   try {
-    return await readTable(table);
+    return await readTable(table, ownerUserId);
   } catch (err) {
     if (err instanceof ApiError && (err.message.includes("Could not find the table") || err.message.includes('PGRST205') || ['metric_snapshots', 'automation_rules', 'automation_runs', 'billing_accounts', 'billing_plans', 'billing_invoices', 'billing_plan_requests', 'incident_events'].some((name) => err.message.includes(name)))) return [];
     throw err;
@@ -213,23 +247,25 @@ const mapBillingPlanRequest = (row: Row) => ({
 
 const sortByNewest = (a: Row, b: Row) => String(b.started_at ?? b.created_at ?? '').localeCompare(String(a.started_at ?? a.created_at ?? ''));
 
-export default async function handler(_req: any, res: any) {
+export default async function handler(req: any, res: any) {
   try {
+    const user = await readAuthUser(req);
+    const ownerUserId = String(user.id);
     const [servers, alerts, automations, automationRules, automationRuns, billingAccounts, billingPlans, billingInvoices, billingPlanRequests, maintenances, backups, tickets, metricSnapshots, incidentEvents] = await Promise.all([
-      readTable('servers'),
-      readTable('alerts'),
-      readTable('automations'),
-      readOptionalTable('automation_rules'),
-      readOptionalTable('automation_runs'),
-      readOptionalTable('billing_accounts'),
+      readTable('servers', ownerUserId),
+      readTable('alerts', ownerUserId),
+      readTable('automations', ownerUserId),
+      readOptionalTable('automation_rules', ownerUserId),
+      readOptionalTable('automation_runs', ownerUserId),
+      readOptionalTable('billing_accounts', ownerUserId),
       readOptionalTable('billing_plans'),
-      readOptionalTable('billing_invoices'),
-      readOptionalTable('billing_plan_requests'),
-      readTable('maintenances'),
-      readTable('backups'),
-      readTable('support_tickets'),
-      readOptionalTable('metric_snapshots'),
-      readOptionalTable('incident_events'),
+      readOptionalTable('billing_invoices', ownerUserId),
+      readOptionalTable('billing_plan_requests', ownerUserId),
+      readTable('maintenances', ownerUserId),
+      readTable('backups', ownerUserId),
+      readTable('support_tickets', ownerUserId),
+      readOptionalTable('metric_snapshots', ownerUserId),
+      readOptionalTable('incident_events', ownerUserId),
     ]);
     return res.status(200).json({
       servers: servers.map(mapServer),

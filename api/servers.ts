@@ -16,6 +16,7 @@ const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'h
   .replace(/\/$/, '')
   .replace(/\/rest\/v1$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const now = () => new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour12: false });
 const clean = (value: unknown, max = 120) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -31,8 +32,40 @@ const headers = (extra: Record<string, string> = {}) => {
   };
 };
 
-const readTable = async (table: string) => {
-  const res = await fetch(`${baseUrl}/rest/v1/${table}?select=*`, { headers: headers() });
+const authHeaders = (token: string) => {
+  const key = supabaseAnonKey || supabaseKey;
+  if (!key) throw new ApiError(500, 'SUPABASE auth key missing');
+  return {
+    apikey: key,
+    Authorization: `Bearer ${decodeURIComponent(token)}`,
+    Accept: 'application/json',
+  };
+};
+
+const sessionToken = (cookieHeader = '') => cookieHeader
+  .split(';')
+  .map((part) => part.trim())
+  .find((part) => part.startsWith('syncera_session='))
+  ?.slice('syncera_session='.length);
+
+const readAuthUser = async (req: any) => {
+  const token = sessionToken(String(req.headers?.cookie || ''));
+  if (!token) throw new ApiError(401, 'Login wajib');
+  const res = await fetch(`${baseUrl}/auth/v1/user`, { headers: authHeaders(token) });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(401, 'Session tidak valid');
+  const user = JSON.parse(body || '{}');
+  if (!user.id) throw new ApiError(401, 'Session tidak valid');
+  return user as Row;
+};
+
+const tableUrl = (table: string, ownerUserId: string, extra?: Record<string, string>) => {
+  const params = new URLSearchParams({ select: '*', owner_user_id: `eq.${ownerUserId}`, ...(extra || {}) });
+  return `${baseUrl}/rest/v1/${table}?${params.toString()}`;
+};
+
+const readTable = async (table: string, ownerUserId: string) => {
+  const res = await fetch(tableUrl(table, ownerUserId), { headers: headers() });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `${table}: ${res.status} ${body.slice(0, 160)}`.trim());
   return JSON.parse(body || '[]') as Row[];
@@ -141,7 +174,7 @@ const probeWebsite = async (url: string) => {
   }
 };
 
-const createServerRecord = async (input: Row, req: any) => {
+const createServerRecord = async (input: Row, req: any, ownerUserId: string) => {
   const name = clean(input.name, 80);
   const requestedType = clean(input.connectorKind ?? input.connectionType ?? input.connection_type, 20) as PublicConnectionType;
   const connectorKind: PublicConnectionType = requestedType || 'agent';
@@ -160,15 +193,15 @@ const createServerRecord = async (input: Row, req: any) => {
     : normalizeHost(clean(input.ipAddress ?? input.ip_address, 160));
   if (connectorKind !== 'website' && !/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(ipAddress)) throw new ApiError(400, 'IP/domain tidak valid');
 
-  // ponytail: list-scan OK sampai ratusan server; upgrade ke unique index + filtered query saat multi-tenant.
-  const duplicate = (await readTable('servers')).find((row) => String(row.name ?? '').toLowerCase() === name.toLowerCase() || String(row.ip_address ?? '').toLowerCase() === ipAddress.toLowerCase());
+  // ponytail: list-scan OK sampai ratusan server per tenant; upgrade ke unique index later.
+  const duplicate = (await readTable('servers', ownerUserId)).find((row) => String(row.name ?? '').toLowerCase() === name.toLowerCase() || String(row.ip_address ?? '').toLowerCase() === ipAddress.toLowerCase());
   if (duplicate) throw new ApiError(409, `Server sudah ada: ${duplicate.name}`);
 
   const id = `srv-${slug(name)}-${Date.now().toString(36)}`;
   const probe = connectorKind === 'website' ? await probeWebsite(ipAddress) : null;
-  const stamp = now();
   const row = {
     id,
+    owner_user_id: ownerUserId,
     name,
     status: probe?.status ?? 'waiting',
     os: connectorKind === 'website' ? 'HTTP endpoint' : clean(input.os, 80) || 'Unknown OS',
@@ -209,8 +242,8 @@ const bodyOf = (req: any) => {
   return req.body;
 };
 
-const patchServer = async (id: string, patch: Row) => {
-  const out = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(id)}`, {
+const patchServer = async (id: string, ownerUserId: string, patch: Row) => {
+  const out = await fetch(tableUrl('servers', ownerUserId, { id: `eq.${id}` }), {
     method: 'PATCH',
     headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
     body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }),
@@ -220,8 +253,8 @@ const patchServer = async (id: string, patch: Row) => {
   return JSON.parse(text || '[]')[0] as Row | undefined;
 };
 
-const deleteServerRows = async (id: string) => {
-  const out = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(id)}`, {
+const deleteServerRows = async (id: string, ownerUserId: string) => {
+  const out = await fetch(tableUrl('servers', ownerUserId, { id: `eq.${id}` }), {
     method: 'DELETE',
     headers: headers({ Prefer: 'return=representation' }),
   });
@@ -232,7 +265,9 @@ const deleteServerRows = async (id: string) => {
 
 export default async function handler(req: any, res: any) {
   try {
-    if (req.method === 'GET') return res.status(200).json({ success: true, servers: (await readTable('servers')).map(mapServer) });
+    const user = await readAuthUser(req);
+    const ownerUserId = String(user.id);
+    if (req.method === 'GET') return res.status(200).json({ success: true, servers: (await readTable('servers', ownerUserId)).map(mapServer) });
 
     if (req.method === 'PATCH') {
       const id = String(req.query?.id || bodyOf(req).id || '').trim();
@@ -244,7 +279,7 @@ export default async function handler(req: any, res: any) {
         if (key in body) patch[key] = body[key];
       }
       if (!Object.keys(patch).length) throw new ApiError(400, 'Tidak ada field yang bisa diubah');
-      const updated = await patchServer(id, patch);
+      const updated = await patchServer(id, ownerUserId, patch);
       if (!updated) throw new ApiError(404, 'Server tidak ditemukan');
       return res.status(200).json({ success: true, server: mapServer(updated) });
     }
@@ -252,13 +287,13 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'DELETE') {
       const id = String(req.query?.id || '').trim();
       if (!id) throw new ApiError(400, 'id server wajib diisi');
-      const deleted = await deleteServerRows(id);
+      const deleted = await deleteServerRows(id, ownerUserId);
       if (!deleted.length) throw new ApiError(404, 'Server tidak ditemukan');
       return res.status(200).json({ success: true, deleted: deleted.map(mapServer) });
     }
 
     if (req.method === 'POST') {
-      const out = await createServerRecord(bodyOf(req), req);
+      const out = await createServerRecord(bodyOf(req), req, ownerUserId);
       return res.status(201).json({ success: true, ...out });
     }
     res.setHeader('Allow', 'GET, POST, PATCH, DELETE');

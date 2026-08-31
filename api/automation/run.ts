@@ -16,6 +16,7 @@ const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'h
   .replace(/\/$/, '')
   .replace(/\/rest\/v1$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const headers = (extra: Record<string, string> = {}) => {
   if (!supabaseKey) throw new ApiError(500, 'SUPABASE key missing');
@@ -25,6 +26,29 @@ const headers = (extra: Record<string, string> = {}) => {
     Accept: 'application/json',
     ...extra,
   };
+};
+
+const authHeaders = (token: string) => {
+  const key = supabaseAnonKey || supabaseKey;
+  if (!key) throw new ApiError(500, 'SUPABASE auth key missing');
+  return { apikey: key, Authorization: `Bearer ${decodeURIComponent(token)}`, Accept: 'application/json' };
+};
+
+const sessionToken = (cookieHeader = '') => cookieHeader
+  .split(';')
+  .map((part) => part.trim())
+  .find((part) => part.startsWith('syncera_session='))
+  ?.slice('syncera_session='.length);
+
+const readAuthUser = async (req: any) => {
+  const token = sessionToken(String(req.headers?.cookie || ''));
+  if (!token) throw new ApiError(401, 'Login wajib');
+  const res = await fetch(`${baseUrl}/auth/v1/user`, { headers: authHeaders(token) });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(401, 'Session tidak valid');
+  const user = JSON.parse(body || '{}');
+  if (!user.id) throw new ApiError(401, 'Session tidak valid');
+  return user as Row;
 };
 
 const emailAddress = (value: string) => value.match(/<([^>]+)>/)?.[1]?.trim() || value.trim();
@@ -111,16 +135,22 @@ const sendSmtpMail = async (to: string[], subject: string, body: string) => {
   return true;
 };
 
-const readTable = async (table: string) => {
-  const res = await fetch(`${baseUrl}/rest/v1/${table}?select=*`, { headers: headers() });
+const tableUrl = (table: string, ownerUserId?: string, extra?: Record<string, string>) => {
+  const params = new URLSearchParams({ select: '*', ...(extra || {}) });
+  if (ownerUserId) params.set('owner_user_id', `eq.${ownerUserId}`);
+  return `${baseUrl}/rest/v1/${table}?${params.toString()}`;
+};
+
+const readTable = async (table: string, ownerUserId?: string) => {
+  const res = await fetch(tableUrl(table, ownerUserId), { headers: headers() });
   const body = await res.text();
   if (!res.ok) throw new ApiError(502, `${table}: ${res.status} ${body.slice(0, 160)}`.trim());
   return JSON.parse(body || '[]') as Row[];
 };
 
-const readOptionalTable = async (table: string) => {
+const readOptionalTable = async (table: string, ownerUserId?: string) => {
   try {
-    return await readTable(table);
+    return await readTable(table, ownerUserId);
   } catch (err) {
     if (err instanceof ApiError && (err.message.includes('Could not find the table') || err.message.includes('PGRST205'))) return [];
     throw err;
@@ -153,13 +183,15 @@ const mapNotificationChannel = (row: Row) => ({
   updatedAt: row.updated_at ?? '',
 });
 
-const upsertNotificationChannel = async (input: Row) => {
+const upsertNotificationChannel = async (input: Row, ownerUserId: string) => {
   const serverId = clean(input.serverId ?? input.server_id, 120);
   const recipients = emailList(clean(input.recipient, 400));
   if (!serverId) throw new ApiError(400, 'serverId wajib diisi');
   if (!recipients.length || recipients.some((email) => !validEmail(email))) throw new ApiError(400, 'Email penerima tidak valid');
+  if (!(await readOptionalTable('servers', ownerUserId)).some((server) => String(server.id) === serverId)) throw new ApiError(404, 'Server tidak ditemukan');
   const row = {
     id: notificationChannelId(serverId),
+    owner_user_id: ownerUserId,
     server_id: serverId,
     channel: 'email',
     recipient: recipients.join(', '),
@@ -208,14 +240,14 @@ const executeAutomation = async (automation: Row): Promise<{ status: RunStatus; 
 
   const type = String(automation.type || 'monitoring');
   if (type === 'health_check') {
-    const servers = await readOptionalTable('servers');
+    const servers = await readOptionalTable('servers', String(automation.owner_user_id || ''));
     const critical = servers.filter((server) => server.status === 'critical').length;
     const offline = serviceCount(servers, 'offline');
     return { status: 'success', targetServer: 'All servers', message: `Health check read ${servers.length} servers; ${critical} critical; ${offline} offline services.` };
   }
 
   if (type === 'monitoring') {
-    const snapshots = await readOptionalTable('metric_snapshots');
+    const snapshots = await readOptionalTable('metric_snapshots', String(automation.owner_user_id || ''));
     return { status: 'success', targetServer: 'Metric snapshots', message: `Monitoring check read ${snapshots.length} metric snapshots.` };
   }
 
@@ -237,6 +269,7 @@ const insertRun = async (automation: Row, result: { status: RunStatus; message: 
   const stamp = nowIso();
   return insertRunRow({
     id: `run-${String(automation.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    owner_user_id: automation.owner_user_id,
     automation_id: String(automation.id),
     automation_name: automation.name ?? 'Untitled automation',
     target_server: result.targetServer,
@@ -256,7 +289,7 @@ const updateAutomation = async (automation: Row) => {
   if ('historyCount' in automation) patch.historyCount = nextCount;
   if (!Object.keys(patch).length) return;
 
-  const res = await fetch(`${baseUrl}/rest/v1/automations?id=eq.${encodeURIComponent(String(automation.id))}`, {
+  const res = await fetch(tableUrl('automations', String(automation.owner_user_id || ''), { id: `eq.${String(automation.id)}` }), {
     method: 'PATCH',
     headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
     body: JSON.stringify(patch),
@@ -266,7 +299,7 @@ const updateAutomation = async (automation: Row) => {
 };
 
 const patchServerHealth = async (server: Row, metrics: Row) => {
-  const res = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(String(server.id))}`, {
+  const res = await fetch(tableUrl('servers', String(server.owner_user_id || ''), { id: `eq.${String(server.id)}` }), {
     method: 'PATCH',
     headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
     body: JSON.stringify({
@@ -288,6 +321,7 @@ const patchServerHealth = async (server: Row, metrics: Row) => {
 const insertMetricSnapshot = async (server: Row, metrics: Row) => {
   const row = {
     id: `snap-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    owner_user_id: server.owner_user_id,
     server_id: String(server.id),
     server_name: server.name || 'Proxmox server',
     cpu_usage: metrics.cpuUsage ?? 0,
@@ -305,7 +339,7 @@ const insertMetricSnapshot = async (server: Row, metrics: Row) => {
 };
 
 const patchServerUnreachable = async (server: Row, reason: string) => {
-  const res = await fetch(`${baseUrl}/rest/v1/servers?id=eq.${encodeURIComponent(String(server.id))}`, {
+  const res = await fetch(tableUrl('servers', String(server.owner_user_id || ''), { id: `eq.${String(server.id)}` }), {
     method: 'PATCH',
     headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
     body: JSON.stringify({
@@ -337,6 +371,7 @@ const inCooldown = (channel: Row) => {
 const insertDelivery = async (channel: Row, alerts: Row[], status: string, message: string) => {
   const row = {
     id: `delivery-${String(channel.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    owner_user_id: channel.owner_user_id,
     channel_id: String(channel.id),
     alert_ids: alerts.map((alert) => String(alert.id)),
     recipient: String(channel.recipient || '-'),
@@ -352,7 +387,7 @@ const insertDelivery = async (channel: Row, alerts: Row[], status: string, messa
 };
 
 const touchChannel = async (channel: Row) => {
-  const res = await fetch(`${baseUrl}/rest/v1/notification_channels?id=eq.${encodeURIComponent(String(channel.id))}`, {
+  const res = await fetch(tableUrl('notification_channels', String(channel.owner_user_id || ''), { id: `eq.${String(channel.id)}` }), {
     method: 'PATCH',
     headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
     body: JSON.stringify({ last_sent_at: nowIso(), updated_at: nowIso() }),
@@ -374,6 +409,7 @@ const insertIncidentEvents = async (rows: Row[]) => {
 
 const incidentEvent = (server: Row, kind: string, title: string, severity: string, detail: string): Row => ({
   id: `incident-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${kind}-${Date.now().toString(36)}`,
+  owner_user_id: server.owner_user_id,
   server_id: String(server.id),
   server_name: server.name || 'Proxmox server',
   incident_key: `proxmox-${kind}-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}`,
@@ -386,7 +422,7 @@ const incidentEvent = (server: Row, kind: string, title: string, severity: strin
 });
 
 const sendServerAlertEmails = async (server: Row, alerts: Row[]) => {
-  const channels = (await readOptionalTable('notification_channels')).filter((channel) =>
+  const channels = (await readOptionalTable('notification_channels', String(server.owner_user_id || ''))).filter((channel) =>
     channel.channel === 'email' && channel.enabled !== false && String(channel.server_id) === String(server.id)
   );
   for (const channel of channels) {
@@ -414,10 +450,10 @@ const sendServerAlertEmails = async (server: Row, alerts: Row[]) => {
   }
 };
 
-const sendNotificationTest = async (serverId: string) => {
-  const server = (await readOptionalTable('servers')).find((item) => String(item.id) === serverId);
+const sendNotificationTest = async (serverId: string, ownerUserId: string) => {
+  const server = (await readOptionalTable('servers', ownerUserId)).find((item) => String(item.id) === serverId);
   if (!server) throw new ApiError(404, 'Server tidak ditemukan');
-  const channels = (await readOptionalTable('notification_channels')).filter((channel) =>
+  const channels = (await readOptionalTable('notification_channels', ownerUserId)).filter((channel) =>
     channel.channel === 'email' && channel.enabled !== false && String(channel.server_id) === String(server.id)
   );
   if (!channels.length) throw new ApiError(400, 'Email alert server belum disimpan');
@@ -448,6 +484,7 @@ const upsertProxmoxUnreachableAlert = async (server: Row, reason: string) => {
   const name = server.name || 'Proxmox server';
   const row = {
     id: alertId(server, 'unreachable'),
+    owner_user_id: server.owner_user_id,
     severity: 'critical',
     title: `Proxmox unreachable di ${name}`,
     server: name,
@@ -473,6 +510,7 @@ const recordProxmoxFailure = async (server: Row, err: unknown, automationName: s
   await upsertProxmoxUnreachableAlert(server, reason);
   return insertRunRow({
     id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+    owner_user_id: server.owner_user_id,
     automation_id: null,
     automation_name: automationName,
     target_server: server.name || 'Proxmox server',
@@ -496,6 +534,7 @@ const upsertProxmoxAlerts = async (server: Row, metrics: Row) => {
   ].filter(Boolean) as Row[];
   const rows = issues.map((issue) => ({
     id: issue.id,
+    owner_user_id: server.owner_user_id,
     severity: issue.severity,
     title: issue.title,
     server: name,
@@ -569,8 +608,8 @@ const collectProxmoxMetrics = async (base: string, token: string) => {
 const proxmoxAutomationMessage = (serverName: string, metrics: Row) =>
   `Proxmox health OK: ${serverName} · node ${metrics.nodeName || 'node'} · PVE ${metrics.version || '?'} · VM/CT ${(metrics.services || []).length} · CPU ${metrics.cpuUsage ?? 0}% · RAM ${metrics.memoryUsage ?? 0}% · Disk ${metrics.storageUsage ?? 0}%`;
 
-const executeProxmoxHealth = async (serverId?: string) => {
-  const server = findProxmoxServer(await readOptionalTable('servers'), serverId);
+const executeProxmoxHealth = async (serverId: string | undefined, ownerUserId: string) => {
+  const server = findProxmoxServer(await readOptionalTable('servers', ownerUserId), serverId);
   try {
     const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
     await patchServerHealth(server, metrics);
@@ -578,6 +617,7 @@ const executeProxmoxHealth = async (serverId?: string) => {
     await upsertProxmoxAlerts(server, metrics);
     return insertRunRow({
       id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+      owner_user_id: server.owner_user_id,
       automation_id: null,
       automation_name: 'Proxmox Health Check',
       target_server: server.name || 'Proxmox server',
@@ -594,13 +634,6 @@ const executeProxmoxHealth = async (serverId?: string) => {
 export default async function handler(req: any, res: any) {
   try {
     if (req.method === 'GET') {
-      if (queryValue(req, 'type') === 'notification_channels') {
-        const serverId = queryValue(req, 'serverId') || queryValue(req, 'server_id');
-        const channels = (await readOptionalTable('notification_channels'))
-          .filter((row) => row.channel === 'email' && (!serverId || String(row.server_id) === serverId))
-          .map(mapNotificationChannel);
-        return res.status(200).json({ success: true, channels });
-      }
       // Vercel cron: run Proxmox health check on all connected servers automatically
       if (String(req.headers?.['x-vercel-cron'] || '').trim() || String(req.headers?.['x-vercel-cron-secret'] || '').trim()) {
         const results: Row[] = [];
@@ -609,9 +642,10 @@ export default async function handler(req: any, res: any) {
             const metrics = await collectProxmoxMetrics(proxmoxBaseUrl(server), String(server.proxmox_token));
             await patchServerHealth(server, metrics);
             await insertMetricSnapshot(server, metrics);
-            const alerts = await upsertProxmoxAlerts(server, metrics);
+            await upsertProxmoxAlerts(server, metrics);
             results.push(await insertRunRow({
               id: `run-proxmox-health-${String(server.id).replace(/[^a-z0-9-]/gi, '-')}-${Date.now().toString(36)}`,
+              owner_user_id: server.owner_user_id,
               automation_id: null,
               automation_name: 'Proxmox Auto Health Check',
               target_server: server.name || 'Proxmox server',
@@ -624,9 +658,18 @@ export default async function handler(req: any, res: any) {
             results.push(await recordProxmoxFailure(server, err, 'Proxmox Auto Health Check'));
           }
         }
-        return res.status(200).json({ success: true, cron: true, checkedAt: nowIso(), results });
+        const failed = results.filter((run) => run.status === 'failed').length;
+        return res.status(200).json({ success: true, cron: true, checkedAt: nowIso(), checked: results.length, failed });
       }
-      const runs = (await readOptionalTable('automation_runs'))
+      const ownerUserId = String((await readAuthUser(req)).id);
+      if (queryValue(req, 'type') === 'notification_channels') {
+        const serverId = queryValue(req, 'serverId') || queryValue(req, 'server_id');
+        const channels = (await readOptionalTable('notification_channels', ownerUserId))
+          .filter((row) => row.channel === 'email' && (!serverId || String(row.server_id) === serverId))
+          .map(mapNotificationChannel);
+        return res.status(200).json({ success: true, channels });
+      }
+      const runs = (await readOptionalTable('automation_runs', ownerUserId))
         .sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')))
         .slice(0, 50)
         .map(mapRun);
@@ -635,20 +678,21 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'POST') {
       const body = bodyOf(req);
+      const ownerUserId = String((await readAuthUser(req)).id);
       if (body.type === 'notification_channel') {
-        const channel = await upsertNotificationChannel(body);
+        const channel = await upsertNotificationChannel(body, ownerUserId);
         return res.status(200).json({ success: true, channel });
       }
       if (body.type === 'notification_test') {
-        const result = await sendNotificationTest(String(body.serverId || ''));
+        const result = await sendNotificationTest(String(body.serverId || ''), ownerUserId);
         return res.status(200).json({ success: true, ...result });
       }
       if (body.type === 'proxmox_health_check') {
-        const run = await executeProxmoxHealth(body.serverId ? String(body.serverId) : undefined);
+        const run = await executeProxmoxHealth(body.serverId ? String(body.serverId) : undefined, ownerUserId);
         return res.status(200).json({ success: true, run });
       }
 
-      const automations = await readTable('automations');
+      const automations = await readTable('automations', ownerUserId);
       const automation = selectAutomation(automations, body.automationId);
       if (!automation) throw new ApiError(404, 'Automation not found');
       const result = await executeAutomation(automation);

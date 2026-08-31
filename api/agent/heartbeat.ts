@@ -32,9 +32,10 @@ const tokenFor = async (serverId: string) => {
 const number = (value: unknown, min = 0, max = 100) => Math.max(min, Math.min(max, Number(value) || 0));
 const serviceStatus = (value: unknown) => ['online', 'degraded', 'offline'].includes(String(value)) ? String(value) : 'offline';
 
-const insertSnapshot = async (serverId: string, serverName: string, cpu: number, mem: number, disk: number, networkTraffic: string) => {
+const insertSnapshot = async (serverId: string, ownerUserId: string | undefined, serverName: string, cpu: number, mem: number, disk: number, networkTraffic: string) => {
   const row = {
     id: `snap-${serverId}-${Date.now().toString(36)}`,
+    owner_user_id: ownerUserId,
     server_id: serverId,
     server_name: serverName,
     cpu_usage: cpu,
@@ -122,7 +123,7 @@ export default async function handler(req: any, res: any) {
     if (!out.ok) throw new ApiError(out.status, text || `heartbeat failed: ${out.status}`);
     const rows = JSON.parse(text || '[]');
     if (!rows[0]) throw new ApiError(404, 'Server tidak ditemukan');
-    await insertSnapshot(serverId, rows[0].name || serverId, cpu, mem, disk, networkTraffic);
+    await insertSnapshot(serverId, rows[0].owner_user_id, rows[0].name || serverId, cpu, mem, disk, networkTraffic);
     return res.status(200).json({ success: true, server: mapServer(rows[0]) });
   } catch (err) {
     return res.status(err instanceof ApiError ? err.status : 500).json({ success: false, error: err instanceof Error ? err.message : 'heartbeat failed' });

@@ -12,15 +12,34 @@ const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'h
   .replace(/\/$/, '')
   .replace(/\/rest\/v1$/, '');
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 const headers = (extra: Record<string, string> = {}) => {
   if (!supabaseKey) throw new ApiError(500, 'SUPABASE key missing');
-  return {
-    apikey: supabaseKey,
-    Authorization: `Bearer ${supabaseKey}`,
-    Accept: 'application/json',
-    ...extra,
-  };
+  return { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}`, Accept: 'application/json', ...extra };
+};
+
+const authHeaders = (token: string) => {
+  const key = supabaseAnonKey || supabaseKey;
+  if (!key) throw new ApiError(500, 'SUPABASE auth key missing');
+  return { apikey: key, Authorization: `Bearer ${decodeURIComponent(token)}`, Accept: 'application/json' };
+};
+
+const sessionToken = (cookieHeader = '') => cookieHeader
+  .split(';')
+  .map((part) => part.trim())
+  .find((part) => part.startsWith('syncera_session='))
+  ?.slice('syncera_session='.length);
+
+const readAuthUser = async (req: any) => {
+  const token = sessionToken(String(req.headers?.cookie || ''));
+  if (!token) throw new ApiError(401, 'Login wajib');
+  const res = await fetch(`${baseUrl}/auth/v1/user`, { headers: authHeaders(token) });
+  const body = await res.text();
+  if (!res.ok) throw new ApiError(401, 'Session tidak valid');
+  const user = JSON.parse(body || '{}');
+  if (!user.id) throw new ApiError(401, 'Session tidak valid');
+  return user as Row;
 };
 
 const bodyOf = (req: any) => {
@@ -29,16 +48,21 @@ const bodyOf = (req: any) => {
   return req.body;
 };
 
-const readTable = async (table: string) => {
-  const res = await fetch(`${baseUrl}/rest/v1/${table}?select=*`, { headers: headers() });
+const tableUrl = (table: string, ownerUserId: string) => {
+  const params = new URLSearchParams({ select: '*', owner_user_id: `eq.${ownerUserId}` });
+  return `${baseUrl}/rest/v1/${table}?${params.toString()}`;
+};
+
+const readTable = async (table: string, ownerUserId: string) => {
+  const res = await fetch(tableUrl(table, ownerUserId), { headers: headers() });
   const text = await res.text();
   if (!res.ok) throw new ApiError(502, `${table}: ${res.status} ${text.slice(0, 160)}`.trim());
   return JSON.parse(text || '[]') as Row[];
 };
 
-const readOptionalTable = async (table: string) => {
+const readOptionalTable = async (table: string, ownerUserId: string) => {
   try {
-    return await readTable(table);
+    return await readTable(table, ownerUserId);
   } catch (err) {
     if (err instanceof ApiError && err.message.includes('Could not find the table')) return [];
     throw err;
@@ -56,8 +80,9 @@ const mapRequest = (row: Row) => ({
 
 export default async function handler(req: any, res: any) {
   try {
+    const ownerUserId = String((await readAuthUser(req)).id);
     if (req.method === 'GET') {
-      const requests = (await readOptionalTable('billing_plan_requests'))
+      const requests = (await readOptionalTable('billing_plan_requests', ownerUserId))
         .sort((a, b) => String(b.requested_at ?? '').localeCompare(String(a.requested_at ?? '')))
         .slice(0, 30)
         .map(mapRequest);
@@ -68,12 +93,13 @@ export default async function handler(req: any, res: any) {
       const body = bodyOf(req);
       const requestedPlan = String(body.requestedPlan || '').trim();
       if (!requestedPlan || requestedPlan.length > 80) throw new ApiError(400, 'requestedPlan tidak valid');
-      const [account] = await readOptionalTable('billing_accounts');
+      const [account] = await readOptionalTable('billing_accounts', ownerUserId);
       const currentPlan = String(account?.plan_name || 'not configured');
       if (requestedPlan.toLowerCase() === currentPlan.toLowerCase()) throw new ApiError(400, 'Plan sudah aktif');
 
       const row = {
         id: `plan-req-${Date.now().toString(36)}`,
+        owner_user_id: ownerUserId,
         current_plan: currentPlan,
         requested_plan: requestedPlan,
         status: 'pending',

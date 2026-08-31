@@ -347,3 +347,68 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "users update own profile" on user_profiles for update using (auth.uid() = id) with check (auth.uid() = id);
 exception when duplicate_object then null; end $$;
+
+-- Multi-tenant isolation: operational rows belong to one login account.
+alter table servers add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table alerts add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table metric_snapshots add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table notification_channels add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table notification_deliveries add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table incident_events add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table automations add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table automation_rules add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table automation_runs add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table maintenances add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table backups add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table support_tickets add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table billing_accounts add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table billing_invoices add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+alter table billing_plan_requests add column if not exists owner_user_id uuid references auth.users(id) on delete cascade;
+
+create index if not exists servers_owner_idx on servers(owner_user_id);
+create index if not exists alerts_owner_idx on alerts(owner_user_id);
+create index if not exists metric_snapshots_owner_idx on metric_snapshots(owner_user_id, server_id, created_at desc);
+create index if not exists notification_channels_owner_idx on notification_channels(owner_user_id, server_id, enabled);
+create index if not exists notification_deliveries_owner_idx on notification_deliveries(owner_user_id, sent_at desc);
+create index if not exists incident_events_owner_idx on incident_events(owner_user_id, occurred_at desc);
+create index if not exists automations_owner_idx on automations(owner_user_id);
+create index if not exists automation_rules_owner_idx on automation_rules(owner_user_id);
+create index if not exists automation_runs_owner_idx on automation_runs(owner_user_id, started_at desc);
+create index if not exists maintenances_owner_idx on maintenances(owner_user_id);
+create index if not exists backups_owner_idx on backups(owner_user_id);
+create index if not exists support_tickets_owner_idx on support_tickets(owner_user_id);
+create index if not exists billing_accounts_owner_idx on billing_accounts(owner_user_id);
+create index if not exists billing_invoices_owner_idx on billing_invoices(owner_user_id);
+create index if not exists billing_plan_requests_owner_idx on billing_plan_requests(owner_user_id, requested_at desc);
+
+drop policy if exists "public read servers" on servers;
+drop policy if exists "public read alerts" on alerts;
+drop policy if exists "public read metric_snapshots" on metric_snapshots;
+drop policy if exists "public read notification_channels" on notification_channels;
+drop policy if exists "public read notification_deliveries" on notification_deliveries;
+drop policy if exists "public read incident_events" on incident_events;
+drop policy if exists "public read automations" on automations;
+drop policy if exists "public read automation_rules" on automation_rules;
+drop policy if exists "public read automation_runs" on automation_runs;
+drop policy if exists "public read maintenances" on maintenances;
+drop policy if exists "public read backups" on backups;
+drop policy if exists "public read support_tickets" on support_tickets;
+drop policy if exists "public read billing_accounts" on billing_accounts;
+drop policy if exists "public read billing_invoices" on billing_invoices;
+drop policy if exists "public read billing_plan_requests" on billing_plan_requests;
+
+do $$ begin create policy "owners read servers" on servers for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read alerts" on alerts for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read metric_snapshots" on metric_snapshots for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read notification_channels" on notification_channels for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read notification_deliveries" on notification_deliveries for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read incident_events" on incident_events for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read automations" on automations for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read automation_rules" on automation_rules for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read automation_runs" on automation_runs for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read maintenances" on maintenances for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read backups" on backups for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read support_tickets" on support_tickets for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read billing_accounts" on billing_accounts for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read billing_invoices" on billing_invoices for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;
+do $$ begin create policy "owners read billing_plan_requests" on billing_plan_requests for select using (auth.uid() = owner_user_id); exception when duplicate_object then null; end $$;

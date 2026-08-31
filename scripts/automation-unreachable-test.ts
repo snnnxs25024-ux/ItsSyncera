@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 process.env.SUPABASE_URL = 'https://supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+process.env.SUPABASE_ANON_KEY = 'test-anon-key';
 process.env.SMTP_USER = 'alerts@syncera.test';
 process.env.SMTP_PASS = 'secret';
 process.env.SMTP_TEST_CAPTURE = '1';
@@ -23,10 +24,11 @@ const incidentBodies: any[] = [];
 (globalThis as any).fetch = async (input: unknown, init: any = {}) => {
   const url = String(input);
   const method = String(init.method || 'GET').toUpperCase();
+  if (url.includes('/auth/v1/user')) return new Response(JSON.stringify({ id: 'user-test', email: 'test@syncera.local' }), { status: 200 });
+  if (url.includes('/rest/v1/servers?') && url.includes('id=eq.srv-pve') && method === 'PATCH') { serverPatches.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); }
   if (url.includes('/rest/v1/servers?select=')) return new Response(JSON.stringify([server]), { status: 200 });
-  if (url.includes('/rest/v1/servers?id=') && method === 'PATCH') { serverPatches.push(JSON.parse(init.body)); return new Response(null, { status: 204 }); }
   if (url.includes('/rest/v1/notification_channels?select=')) return new Response(JSON.stringify([{ id: 'chan-1', server_id: 'srv-pve', channel: 'email', recipient: 'client@syncera.test', enabled: true, severity_filter: 'critical', cooldown_minutes: 60 }]), { status: 200 });
-  if (url.includes('/rest/v1/notification_channels?id=') && method === 'PATCH') return new Response(null, { status: 204 });
+  if (url.includes('/rest/v1/notification_channels?') && url.includes('id=eq.chan-1') && method === 'PATCH') return new Response(null, { status: 204 });
   if (url.includes('/rest/v1/notification_deliveries') && method === 'POST') { deliveryBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   if (url.includes('/rest/v1/alerts') && method === 'POST') { alertBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   if (url.includes('/rest/v1/incident_events') && method === 'POST') { incidentBodies.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
@@ -43,7 +45,7 @@ const res = {
   setHeader() {},
   json(payload: unknown) { this.payload = payload; return this; },
 };
-await handler({ method: 'POST', body: { type: 'proxmox_health_check', serverId: 'srv-pve' } }, res);
+await handler({ method: 'POST', headers: { cookie: 'syncera_session=test-session' }, body: { type: 'proxmox_health_check', serverId: 'srv-pve' } }, res);
 const mails = (globalThis as any).__sentMails || [];
 assert.equal(res.code, 200);
 assert.equal(res.payload.run.status, 'failed');

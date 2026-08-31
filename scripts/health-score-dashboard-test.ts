@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 process.env.SUPABASE_URL = 'https://supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+process.env.SUPABASE_ANON_KEY = 'test-anon-key';
 
 const healthyServer = {
   id: 'srv-healthy',
@@ -56,6 +57,7 @@ const incidents = [{
 
 (globalThis as any).fetch = async (input: unknown) => {
   const url = String(input);
+  if (url.includes('/auth/v1/user')) return new Response(JSON.stringify({ id: 'user-test', email: 'test@syncera.local' }), { status: 200 });
   const table = url.match(/\/rest\/v1\/([^?]+)/)?.[1];
   const rows: Record<string, unknown[]> = {
     servers: [healthyServer, riskyServer],
@@ -84,7 +86,7 @@ const res = {
   status(code: number) { this.code = code; return this; },
   json(payload: unknown) { this.payload = payload; return this; },
 };
-await handler({}, res);
+await handler({ headers: { cookie: 'syncera_session=test-session' } }, res);
 
 assert.equal(res.code, 200);
 assert.equal(res.payload.servers[0].healthScore, 100);
