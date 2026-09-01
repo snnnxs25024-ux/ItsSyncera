@@ -33,6 +33,12 @@ interface DashboardLayoutProps {
   tickets: SupportTicket[];
   metricSnapshots: MetricSnapshot[];
   incidentEvents: IncidentEvent[];
+  accountIdentity: {
+    companyName: string;
+    fullName: string;
+    email: string;
+    initials: string;
+  };
   onRefreshData: () => void;
   onLogout: () => void;
 }
@@ -52,6 +58,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   tickets,
   metricSnapshots,
   incidentEvents,
+  accountIdentity,
   onRefreshData,
   onLogout
 }) => {
@@ -196,11 +203,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
             <div className="flex items-center space-x-2 border-l border-sky-200 pl-3">
               <div className="w-8 h-8 bg-sky-500 text-white font-mono text-xs font-bold flex items-center justify-center">
-                AS
+                {accountIdentity.initials}
               </div>
-              <div className="hidden sm:block font-mono text-xs">
-                <span className="font-bold text-slate-900 block leading-none">{billingAccount?.companyName || 'Client belum dikonfigurasi'}</span>
-                <span className="text-[10px] text-sky-600 uppercase">Billing Profile</span>
+              <div className="hidden max-w-[180px] sm:block font-mono text-xs" title={accountIdentity.email}>
+                <span className="font-bold text-slate-900 block leading-none truncate">{accountIdentity.companyName}</span>
+                <span className="text-[10px] text-sky-600 uppercase truncate block">{accountIdentity.fullName} · {accountIdentity.email}</span>
               </div>
             </div>
           </div>
@@ -214,6 +221,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               <button onClick={() => setMobileSidebarOpen(false)} className="text-slate-700 p-1">
                 <X className="w-6 h-6" />
               </button>
+            </div>
+            <div className="border border-sky-100 bg-sky-50/60 p-3 font-mono text-xs">
+              <p className="font-bold text-slate-900 truncate">{accountIdentity.companyName}</p>
+              <p className="text-[10px] uppercase text-sky-700 truncate">{accountIdentity.fullName}</p>
+              <p className="text-[10px] text-slate-500 truncate">{accountIdentity.email}</p>
             </div>
             <div className="space-y-1 overflow-y-auto flex-1">
               {navigationItems.map((item) => {

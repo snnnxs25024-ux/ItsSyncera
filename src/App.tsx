@@ -12,6 +12,11 @@ import { AuthModal } from './components/AuthModal';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { DashboardData, fetchDashboardData } from './lib/supabaseRest';
 
+type AuthUser = {
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+};
+
 const initialDashboardData: DashboardData = {
   servers: [],
   alerts: [],
@@ -32,6 +37,7 @@ const initialDashboardData: DashboardData = {
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('register');
   const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData);
@@ -41,12 +47,29 @@ export default function App() {
     fetchDashboardData().then(setDashboardData);
   }, []);
 
-  useEffect(() => {
-    fetch('/api/auth/me')
+  const loadAuthUser = useCallback(() => {
+    return fetch('/api/auth/me', { credentials: 'include' })
       .then((res) => res.json())
-      .then((data) => setIsLoggedIn(Boolean(data.user)))
+      .then((data) => {
+        const user = data.user || null;
+        setAuthUser(user);
+        setIsLoggedIn(Boolean(user));
+      })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    loadAuthUser();
+  }, [loadAuthUser]);
+
+  const accountIdentity = (() => {
+    const meta = authUser?.user_metadata || {};
+    const fullName = String(meta.full_name || authUser?.email || 'Client');
+    const companyName = String(meta.company_name || dashboardData.billingAccount?.companyName || 'Client belum dikonfigurasi');
+    const email = String(authUser?.email || meta.email || '-');
+    const initials = fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'CL';
+    return { companyName, fullName, email, initials };
+  })();
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -90,9 +113,11 @@ export default function App() {
         tickets={dashboardData.tickets}
         metricSnapshots={dashboardData.metricSnapshots}
         incidentEvents={dashboardData.incidentEvents}
+        accountIdentity={accountIdentity}
         onRefreshData={loadDashboardData}
         onLogout={async () => {
           await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+          setAuthUser(null);
           setIsLoggedIn(false);
         }}
       />
@@ -139,7 +164,7 @@ export default function App() {
         isOpen={authModalOpen} 
         initialMode={authMode} 
         onClose={() => setAuthModalOpen(false)} 
-        onSuccess={() => setIsLoggedIn(true)}
+        onSuccess={() => loadAuthUser()}
       />
 
     </div>
